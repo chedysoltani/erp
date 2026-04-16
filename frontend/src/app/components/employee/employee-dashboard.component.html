@@ -1,0 +1,446 @@
+<div class="employee-dashboard">
+  <!-- Header -->
+  <header class="dashboard-header">
+    <div class="header-left">
+      <h1 class="dashboard-title">Tableau de Bord Employé</h1>
+      <p class="dashboard-subtitle">Bienvenue, {{ currentEmployee?.prenom }} {{ currentEmployee?.nom }}</p>
+    </div>
+    <div class="header-right">
+      <div class="header-actions">
+        <button class="btn-notification" title="Notifications">
+          <i class="bi bi-bell"></i>
+          <span class="notification-badge">3</span>
+        </button>
+        <button class="btn-profile" title="Profil">
+          <i class="bi bi-person-circle"></i>
+        </button>
+        <button class="btn-logout" title="Déconnexion" (click)="logout()">
+          <i class="bi bi-box-arrow-right"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation -->
+  <nav class="dashboard-nav">
+    <div class="nav-items">
+      <button 
+        class="nav-item" 
+        [class]="{ active: activeSection === 'dashboard' }"
+        (click)="changeSection('dashboard')">
+        <i class="bi bi-grid"></i>
+        <span>Dashboard</span>
+      </button>
+      <button 
+        class="nav-item" 
+        [class]="{ active: activeSection === 'taches' }"
+        (click)="changeSection('taches')">
+        <i class="bi bi-list-task"></i>
+        <span>Mes Tâches</span>
+      </button>
+      <button 
+        class="nav-item" 
+        [class]="{ active: activeSection === 'timesheet' }"
+        (click)="changeSection('timesheet')">
+        <i class="bi bi-clock"></i>
+        <span>Timesheet</span>
+      </button>
+      <button 
+        class="nav-item" 
+        [class]="{ active: activeSection === 'reunions' }"
+        (click)="changeSection('reunions')">
+        <i class="bi bi-calendar"></i>
+        <span>Réunions</span>
+      </button>
+      <button 
+        class="nav-item" 
+        [class]="{ active: activeSection === 'documents' }"
+        (click)="changeSection('documents')">
+        <i class="bi bi-file-text"></i>
+        <span>Documents</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="dashboard-content">
+    <!-- ══ DASHBOARD ══ -->
+    <div *ngIf="activeSection === 'dashboard'" class="section fade-in">
+      <!-- Stats Overview -->
+      <section class="stats-section">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon blue">
+              <i class="bi bi-check-circle"></i>
+            </div>
+            <div class="stat-content">
+              <h3 class="stat-number">{{ employeeStats.tasksCompleted }}</h3>
+              <p class="stat-label">Tâches Terminées</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon orange">
+              <i class="bi bi-hourglass-split"></i>
+            </div>
+            <div class="stat-content">
+              <h3 class="stat-number">{{ employeeStats.tasksInProgress }}</h3>
+              <p class="stat-label">En Cours</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green">
+              <i class="bi bi-clock-history"></i>
+            </div>
+            <div class="stat-content">
+              <h3 class="stat-number">{{ employeeStats.hoursWorked }}</h3>
+              <p class="stat-label">Heures Travaillées</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon purple">
+              <i class="bi bi-calendar-event"></i>
+            </div>
+            <div class="stat-content">
+              <h3 class="stat-number">{{ employeeStats.upcomingMeetings }}</h3>
+              <p class="stat-label">Réunions à Venir</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Main Grid -->
+      <section class="content-grid">
+        <!-- My Tasks -->
+        <div class="card tasks-card">
+          <div class="card-header">
+            <h2 class="card-title">Mes Tâches</h2>
+            <button class="view-all-btn">Voir tout</button>
+          </div>
+          <div class="tasks-list">
+            <div class="task-item" *ngFor="let task of myTasks.slice(0, 3)">
+              <div class="task-info">
+                <h4 class="task-title">{{ task.title }}</h4>
+                <p class="task-description">{{ task.description }}</p>
+                <div class="task-meta">
+                  <span class="due-date">
+                    <i class="bi bi-calendar"></i>
+                    {{ task.dueDate }}
+                  </span>
+                  <span class="priority" [style.color]="getPriorityColor(task.priority)">
+                    {{ task.priority }}
+                  </span>
+                </div>
+              </div>
+              <div class="task-progress">
+                <div class="progress-bar">
+                  <div 
+                    class="progress-fill" 
+                    [style.width.%]="task.progress"
+                    [style.background-color]="getStatusColor(task.status)">
+                  </div>
+                </div>
+                <span class="progress-text">{{ task.progress }}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Activities -->
+        <div class="card activities-card">
+          <div class="card-header">
+            <h2 class="card-title">Activités Récentes</h2>
+            <button class="refresh-btn">
+              <i class="bi bi-arrow-clockwise"></i>
+            </button>
+          </div>
+          <div class="activities-list">
+            <div class="activity-item" *ngFor="let activity of recentActivities">
+              <div class="activity-icon" [class]="activity.color">
+                <i [class]="'bi ' + activity.icon"></i>
+              </div>
+              <div class="activity-content">
+                <h4 class="activity-title">{{ activity.title }}</h4>
+                <p class="activity-time">{{ activity.time }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Upcoming Meetings -->
+      <section class="meetings-section">
+        <div class="card meetings-card">
+          <div class="card-header">
+            <h2 class="card-title">Réunions à Venir</h2>
+            <button class="view-all-btn">Voir tout</button>
+          </div>
+          <div class="meetings-list">
+            <div class="meeting-item" *ngFor="let meeting of myMeetings.slice(0, 2)">
+              <div class="meeting-time">
+                <span class="time">{{ meeting.time }}</span>
+                <span class="duration">{{ meeting.duration }}</span>
+              </div>
+              <div class="meeting-info">
+                <h4 class="meeting-title">{{ meeting.title }}</h4>
+                <div class="meeting-meta">
+                  <span class="meeting-date">
+                    <i class="bi bi-calendar"></i>
+                    {{ meeting.date }}
+                  </span>
+                  <span class="meeting-location">
+                    <i class="bi bi-geo-alt"></i>
+                    {{ meeting.location }}
+                  </span>
+                </div>
+              </div>
+              <div class="meeting-actions">
+                <button class="btn-join" (click)="joinMeeting(meeting.id)">
+                  <i class="bi bi-camera-video"></i>
+                  Rejoindre
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ══ MES TÂCHES ══ -->
+    <div *ngIf="activeSection === 'taches'" class="section fade-in">
+      <div class="section-header">
+        <h2 class="section-title">Mes Tâches</h2>
+        <div class="section-actions">
+          <div class="filter-controls">
+            <select class="filter-select">
+              <option>Toutes les priorités</option>
+              <option>Haute</option>
+              <option>Moyenne</option>
+              <option>Basse</option>
+            </select>
+            <select class="filter-select">
+              <option>Tous les statuts</option>
+              <option>À faire</option>
+              <option>En cours</option>
+              <option>Terminé</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="tasks-grid">
+        <div class="task-card" *ngFor="let task of myTasks" [class]="{ 'completed': task.status === 'done' }">
+          <div class="task-header">
+            <h3 class="task-title">{{ task.title }}</h3>
+            <span class="task-priority" [style.background-color]="getPriorityColor(task.priority)">
+              {{ task.priority }}
+            </span>
+          </div>
+          <p class="task-description">{{ task.description }}</p>
+          <div class="task-meta">
+            <span class="task-due">
+              <i class="bi bi-calendar"></i>
+              {{ task.dueDate }}
+            </span>
+            <span class="task-status" [style.color]="getStatusColor(task.status)">
+              {{ getTaskStatusLabel(task.status) }}
+            </span>
+          </div>
+          <div class="task-progress-section">
+            <div class="progress-header">
+              <span>Progression</span>
+              <span>{{ task.progress }}%</span>
+            </div>
+            <div class="progress-bar">
+              <div 
+                class="progress-fill" 
+                [style.width.%]="task.progress"
+                [style.background-color]="getStatusColor(task.status)">
+              </div>
+            </div>
+          </div>
+          <div class="task-actions">
+            <button class="btn-action" (click)="increaseTaskProgress(task.id)">
+              <i class="bi bi-plus"></i>
+              +10%
+            </button>
+            <button class="btn-action btn-complete" (click)="completeTask(task.id)" *ngIf="task.status !== 'done'">
+              <i class="bi bi-check"></i>
+              Terminer
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ TIMESHEET ══ -->
+    <div *ngIf="activeSection === 'timesheet'" class="section fade-in">
+      <div class="section-header">
+        <h2 class="section-title">Timesheet</h2>
+        <div class="section-actions">
+          <button class="btn-primary">
+            <i class="bi bi-plus-circle"></i>
+            Ajouter Timesheet
+          </button>
+        </div>
+      </div>
+
+      <div class="timesheet-table-container">
+        <table class="timesheet-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Projet</th>
+              <th>Heures</th>
+              <th>Description</th>
+              <th>Statut</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let timesheet of myTimesheets">
+              <td>{{ timesheet.date }}</td>
+              <td>{{ timesheet.project }}</td>
+              <td>{{ timesheet.hours }}h</td>
+              <td>{{ timesheet.description }}</td>
+              <td>
+                <span class="status-badge" [style.background-color]="getStatusColor(timesheet.status)">
+                  {{ getTimesheetStatusLabel(timesheet.status) }}
+                </span>
+              </td>
+              <td>
+                <div class="table-actions">
+                  <button class="btn-edit" title="Modifier">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                  <button class="btn-submit" title="Soumettre" (click)="submitTimesheet(timesheet.id)" *ngIf="timesheet.status === 'pending'">
+                    <i class="bi bi-send"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══ RÉUNIONS ══ -->
+    <div *ngIf="activeSection === 'reunions'" class="section fade-in">
+      <div class="section-header">
+        <h2 class="section-title">Mes Réunions</h2>
+        <div class="section-actions">
+          <button class="btn-primary">
+            <i class="bi bi-plus-circle"></i>
+            Nouvelle Réunion
+          </button>
+        </div>
+      </div>
+
+      <div class="meetings-grid">
+        <div class="meeting-card" *ngFor="let meeting of myMeetings">
+          <div class="meeting-header">
+            <div class="meeting-type" [class]="meeting.type">
+              {{ meeting.type }}
+            </div>
+            <div class="meeting-time">
+              <i class="bi bi-clock"></i>
+              {{ meeting.time }} ({{ meeting.duration }})
+            </div>
+          </div>
+          <h3 class="meeting-title">{{ meeting.title }}</h3>
+          <p class="meeting-description">{{ meeting.description }}</p>
+          <div class="meeting-details">
+            <div class="meeting-detail">
+              <i class="bi bi-calendar"></i>
+              <span>{{ meeting.date }}</span>
+            </div>
+            <div class="meeting-detail">
+              <i class="bi bi-geo-alt"></i>
+              <span>{{ meeting.location }}</span>
+            </div>
+            <div class="meeting-detail">
+              <i class="bi bi-people"></i>
+              <span>{{ meeting.participants.length }} participants</span>
+            </div>
+          </div>
+          <div class="meeting-participants">
+            <div class="participant-avatar" *ngFor="let participant of meeting.participants.slice(0, 3)">
+              {{ participant.charAt(0) }}
+            </div>
+            <div class="participant-more" *ngIf="meeting.participants.length > 3">
+              +{{ meeting.participants.length - 3 }}
+            </div>
+          </div>
+          <div class="meeting-actions">
+            <button class="btn-join" (click)="joinMeeting(meeting.id)">
+              <i class="bi bi-camera-video"></i>
+              Rejoindre
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ DOCUMENTS ══ -->
+    <div *ngIf="activeSection === 'documents'" class="section fade-in">
+      <div class="section-header">
+        <h2 class="section-title">Documents</h2>
+        <div class="section-actions">
+          <button class="btn-primary">
+            <i class="bi bi-plus-circle"></i>
+            Nouveau Document
+          </button>
+        </div>
+      </div>
+
+      <div class="documents-grid">
+        <div class="document-card">
+          <div class="document-icon">
+            <i class="bi bi-file-earmark-pdf"></i>
+          </div>
+          <h3 class="document-title">Rapport Mensuel Mars</h3>
+          <p class="document-info">PDF • 2.3 MB • Il y a 2 jours</p>
+          <div class="document-actions">
+            <button class="btn-download">
+              <i class="bi bi-download"></i>
+            </button>
+            <button class="btn-share">
+              <i class="bi bi-share"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="document-card">
+          <div class="document-icon">
+            <i class="bi bi-file-earmark-word"></i>
+          </div>
+          <h3 class="document-title">Compte Rendu Réunion</h3>
+          <p class="document-info">DOCX • 1.1 MB • Il y a 3 jours</p>
+          <div class="document-actions">
+            <button class="btn-download">
+              <i class="bi bi-download"></i>
+            </button>
+            <button class="btn-share">
+              <i class="bi bi-share"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="document-card">
+          <div class="document-icon">
+            <i class="bi bi-file-earmark-excel"></i>
+          </div>
+          <h3 class="document-title">Timesheet Mars</h3>
+          <p class="document-info">XLSX • 856 KB • Il y a 5 jours</p>
+          <div class="document-actions">
+            <button class="btn-download">
+              <i class="bi bi-download"></i>
+            </button>
+            <button class="btn-share">
+              <i class="bi bi-share"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>

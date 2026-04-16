@@ -15,6 +15,18 @@ export interface Manager {
   token?: string;
 }
 
+export interface Employee {
+  id: number;
+  nom: string;
+  prenom: string;
+  email: string;
+  role: string;
+  telephone: string;
+  date_creation: string;
+  manager_id: number;
+  token?: string;
+}
+
 export interface Project {
   id?: number;
   name: string;
