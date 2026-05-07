@@ -586,16 +586,35 @@ export class GanttPageComponent implements OnInit {
           console.log(`Tâches ${status} chargées:`, tasks);
           
           // Transformer les tâches pour le Gantt
-          const ganttTasks = tasks.map((task: any) => ({
-            id: `${task.project_id || 1}-${task.id}`,
-            projectId: task.project_id || 1,
-            name: task.title,
-            startDate: task.due_date || this.getDefaultStartDate(),
-            endDate: this.calculateEndDate(task.due_date, task.estimated_hours || 8),
-            progress: task.progress || 0,
-            status: task.status || 'todo',
-            assignee: task.assignee_name || 'Non assigné'
-          }));
+          const ganttTasks = tasks.map((task: any) => {
+            const project = this.projects.find(p => p.id === task.project_id);
+            if (!project) {
+              console.error(`Projet non trouvé pour la tâche ${task.title}`);
+              return null;
+            }
+            
+            const startDate = task.due_date || this.getDefaultStartDate();
+            const endDate = this.calculateEndDate(startDate, task.estimated_hours || 8);
+            
+            console.log(`Tâche: ${task.title}`, {
+              startDate,
+              endDate,
+              projectId: project.id,
+              projectStartDate: project.startDate,
+              projectEndDate: project.endDate
+            });
+            
+            return {
+              id: `${project.id}-${task.id}`,
+              projectId: project.id,
+              name: task.title,
+              startDate: startDate,
+              endDate: endDate,
+              progress: task.progress || 0,
+              status: task.status || 'todo',
+              assignee: task.assignee_name || 'Non assigné'
+            };
+          }).filter(Boolean);
           
           this.tasks.push(...ganttTasks);
         },
@@ -686,19 +705,48 @@ export class GanttPageComponent implements OnInit {
 
   getTaskStyle(task: GanttTask) {
     const project = this.projects.find(p => p.id === task.projectId);
-    if (!project) return {};
+    if (!project) {
+      console.error(`Projet non trouvé pour la tâche ${task.name}`);
+      return { display: 'none' };
+    }
 
     const projectStart = new Date(project.startDate).getTime();
     const projectEnd = new Date(project.endDate).getTime();
     const taskStart = new Date(task.startDate).getTime();
     const taskEnd = new Date(task.endDate).getTime();
 
+    // Vérifier si les dates sont valides
+    if (isNaN(projectStart) || isNaN(projectEnd) || isNaN(taskStart) || isNaN(taskEnd)) {
+      console.error(`Dates invalides pour la tâche ${task.name}`, {
+        projectStart,
+        projectEnd,
+        taskStart,
+        taskEnd
+      });
+      return { display: 'none' };
+    }
+
     const projectDuration = projectEnd - projectStart;
     const taskStartOffset = taskStart - projectStart;
     const taskDuration = taskEnd - taskStart;
 
-    const left = (taskStartOffset / projectDuration) * 100;
-    const width = (taskDuration / projectDuration) * 100;
+    // Si la tâche est complètement en dehors du projet, ne pas l'afficher
+    if (taskEnd < projectStart || taskStart > projectEnd) {
+      console.warn(`Tâche ${task.name} en dehors des limites du projet`);
+      return { display: 'none' };
+    }
+
+    let left = (taskStartOffset / projectDuration) * 100;
+    let width = (taskDuration / projectDuration) * 100;
+
+    // Ajuster les valeurs si elles sont hors limites
+    if (left < 0) {
+      width += left;
+      left = 0;
+    }
+    if (left + width > 100) {
+      width = 100 - left;
+    }
 
     let backgroundColor = '#6b7280'; // todo (gris)
     if (task.status === 'done') backgroundColor = '#10b981'; // vert
@@ -711,11 +759,12 @@ export class GanttPageComponent implements OnInit {
 
     return {
       position: 'absolute',
-      left: `${left}%`,
-      width: `${width}%`,
+      left: `${Math.max(0, left)}%`,
+      width: `${Math.max(1, width)}%`,
       'background-color': backgroundColor,
       top: `${top}px`,
-      'z-index': 2
+      'z-index': 2,
+      'min-width': '60px'
     };
   }
 
