@@ -419,7 +419,9 @@ export class EmployeeDashboardComponent implements OnInit {
       error: (error: any) => {
         console.error('Erreur lors du chargement des réunions assignées:', error);
         // En cas d'erreur, utiliser les données mockées
-        console.log('Fallback: utilisation des données locales pour les réunions');
+        console.log('Fallback: utilisation des données mockées pour les réunions');
+        this.myMeetings = [...this.baseMeetings];
+        this.calculateStats();
       }
     });
   }

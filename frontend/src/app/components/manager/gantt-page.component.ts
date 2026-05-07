@@ -842,7 +842,7 @@ export class GanttPageComponent implements OnInit {
   }
 
   goBack() {
-    this.router.navigate(['/manager-dashboard']);
+    this.router.navigate(['/manager/dashboard']);
   }
 
   // Méthodes utilitaires
