@@ -83,6 +83,7 @@ export class ManagerDashboardComponent implements OnInit {
     type: 'team',
     agenda: [],
     participants: [],
+    selectedEmployees: [],
     notes: ''
   };
   newMeeting: any = {
@@ -93,6 +94,7 @@ export class ManagerDashboardComponent implements OnInit {
     type: 'team',
     agenda: [],
     participants: [],
+    selectedEmployees: [],
     notes: ''
   };
 
@@ -1625,7 +1627,8 @@ export class ManagerDashboardComponent implements OnInit {
       status: 'upcoming' as const,
       participants: this.newMeeting.participants || 1,
       agenda: this.newMeeting.agenda || [],
-      notes: this.newMeeting.notes || ''
+      notes: this.newMeeting.notes || '',
+      selectedEmployees: this.newMeeting.selectedEmployees || []
     };
 
     // Créer la réunion via l'API
@@ -1760,6 +1763,7 @@ export class ManagerDashboardComponent implements OnInit {
       type: 'team',
       agenda: [],
       participants: [],
+      selectedEmployees: [],
       notes: ''
     };
   }
@@ -1782,5 +1786,28 @@ export class ManagerDashboardComponent implements OnInit {
       'review': '#8B5CF6'
     };
     return colors[type as keyof typeof colors] || '#6B7280';
+  }
+
+  // Méthode pour mettre à jour la sélection des employés
+  updateSelectedEmployees(employeeId: number, event: any) {
+    const isChecked = event.target?.checked || false;
+    if (!this.newMeeting.selectedEmployees) {
+      this.newMeeting.selectedEmployees = [];
+    }
+    
+    if (isChecked) {
+      // Ajouter l'employé s'il n'est pas déjà sélectionné
+      if (!this.newMeeting.selectedEmployees.includes(employeeId)) {
+        this.newMeeting.selectedEmployees.push(employeeId);
+      }
+    } else {
+      // Retirer l'employé
+      const index = this.newMeeting.selectedEmployees.indexOf(employeeId);
+      if (index > -1) {
+        this.newMeeting.selectedEmployees.splice(index, 1);
+      }
+    }
+    
+    console.log('Employés sélectionnés après modification:', this.newMeeting.selectedEmployees);
   }
 }

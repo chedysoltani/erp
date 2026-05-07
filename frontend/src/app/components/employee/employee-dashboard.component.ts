@@ -184,6 +184,7 @@ export class EmployeeDashboardComponent implements OnInit {
   ngOnInit() {
     this.checkEmployeeAuth();
     this.loadEmployeeData();
+    this.loadMeetingsFromDatabase();
     this.calculateStats();
   }
 
@@ -379,6 +380,47 @@ export class EmployeeDashboardComponent implements OnInit {
     this.updateTaskProgress(taskId, 100);
   }
 
+  loadMeetingsFromDatabase() {
+    console.log('Début du chargement des réunions assignées depuis la base...');
+    
+    if (!this.currentEmployee) {
+      console.error('Aucun employé connecté pour charger les réunions');
+      return;
+    }
+
+    this.managerAuthService.getEmployeeMeetings(this.currentEmployee.id).subscribe({
+      next: (response: any) => {
+        const meetings = response.data || response;
+        console.log('Réunions assignées chargées depuis la base:', meetings);
+        
+        // Transformer les réunions pour l'affichage
+        this.myMeetings = meetings.map((meeting: any) => ({
+          id: meeting.id,
+          title: meeting.title,
+          type: meeting.type,
+          date: new Date(meeting.date_time).toLocaleDateString('fr-FR'),
+          time: new Date(meeting.date_time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          duration: meeting.duration,
+          participants: [], // Sera rempli plus tard si nécessaire
+          location: meeting.location,
+          description: meeting.description,
+          status: meeting.meeting_status || 'pending',
+          color: meeting.type === 'team' ? '#10B981' : meeting.type === 'client' ? '#3B82F6' : meeting.type === 'technical' ? '#F59E0B' : '#8B5CF6'
+        }));
+        
+        console.log('Réunions transformées pour affichage:', this.myMeetings);
+        
+        // Mettre à jour les statistiques
+        this.calculateStats();
+      },
+      error: (error: any) => {
+        console.error('Erreur lors du chargement des réunions assignées:', error);
+        // En cas d'erreur, utiliser les données mockées
+        console.log('Fallback: utilisation des données locales pour les réunions');
+      }
+    });
+  }
+
   // Méthodes pour les réunions
   joinMeeting(meetingId: number) {
     const meeting = this.myMeetings.find(m => m.id === meetingId);
@@ -386,6 +428,23 @@ export class EmployeeDashboardComponent implements OnInit {
       alert(`Rejoindre la réunion: ${meeting.title}`);
       // TODO: Implémenter la logique pour rejoindre la réunion
     }
+  }
+
+  updateMeetingStatus(meetingId: number, status: string) {
+    if (!this.currentEmployee) return;
+    
+    this.managerAuthService.updateMeetingAttendance(meetingId, this.currentEmployee.id, status).subscribe({
+      next: (response: any) => {
+        console.log('Statut de réunion mis à jour:', response);
+        alert('Statut de participation mis à jour avec succès');
+        // Recharger les réunions
+        this.loadMeetingsFromDatabase();
+      },
+      error: (error: any) => {
+        console.error('Erreur lors de la mise à jour du statut:', error);
+        alert('Erreur lors de la mise à jour du statut');
+      }
+    });
   }
 
   // Méthodes pour les timesheets

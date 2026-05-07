@@ -31,7 +31,8 @@ router.post('/', authenticateToken, async (req, res) => {
       participants = 1,
       agenda = [],
       notes = '',
-      meeting_link = ''
+      meeting_link = '',
+      selectedEmployees = []
     } = req.body;
 
     // Validation des champs obligatoires
@@ -84,7 +85,10 @@ router.post('/', authenticateToken, async (req, res) => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
-    const [result] = await connection.execute(query, [
+    // Démarrer une transaction
+    await connection.beginTransaction();
+
+    const values = [
       title,
       description || title,
       formattedDateTime,
@@ -92,23 +96,61 @@ router.post('/', authenticateToken, async (req, res) => {
       location,
       type,
       status,
-      participants,
+      Array.isArray(participants) ? participants.length : (participants || 1),
       req.user.id,
       JSON.stringify(agenda),
       notes,
-      meeting_link
-    ]);
+      meeting_link || ''
+    ];
 
-    connection.release();
+    console.log('Valeurs pour l\'insertion:', values);
+    console.log('Nombre de valeurs:', values.length);
+    console.log('Requête:', query);
 
-    // Récupérer la réunion créée
+    const [result] = await connection.execute(query, values);
+
+    const meetingId = result.insertId;
+
+    // Insérer les employés assignés à la réunion
+    if (selectedEmployees && selectedEmployees.length > 0) {
+      console.log('Employés sélectionnés:', selectedEmployees);
+      
+      // Vérifier d'abord si les employés existent
+      // NOTE: La vérification est commentée pour éviter les conflits de transaction
+      // Les employés sont supposés exister grâce à la contrainte de clé étrangère
+      
+      const employeeQuery = `
+        INSERT INTO meeting_employees (meeting_id, employee_id, status)
+        VALUES (?, ?, 'pending')
+      `;
+
+      for (const employeeId of selectedEmployees) {
+        console.log('Insertion employé ID:', employeeId, 'pour réunion ID:', meetingId);
+        await connection.execute(employeeQuery, [meetingId, employeeId]);
+      }
+    }
+
+    // Récupérer la réunion créée avec ses employés assignés
     const [meetingRows] = await connection.execute(
       'SELECT * FROM meetings WHERE id = ?',
-      [result.insertId]
+      [meetingId]
     );
+
+    const [employeeRows] = await connection.execute(
+      `SELECT u.id, u.nom, u.prenom, u.email, me.status as meeting_status
+       FROM meeting_employees me
+       JOIN users u ON me.employee_id = u.id
+       WHERE me.meeting_id = ?`,
+      [meetingId]
+    );
+
+    // Valider la transaction
+    await connection.commit();
+    connection.release();
 
     const meeting = meetingRows[0];
     meeting.agenda = JSON.parse(meeting.agenda || '[]');
+    meeting.assignedEmployees = employeeRows;
 
     res.status(201).json({
       success: true,
@@ -427,6 +469,89 @@ router.get('/:id', authenticateToken, async (req, res) => {
     console.error('Erreur lors de la récupération de la réunion:', error);
     res.status(500).json({ 
       error: 'Erreur serveur lors de la récupération de la réunion',
+      details: error.message
+    });
+  }
+});
+
+// Récupérer les réunions assignées à un employé
+router.get('/employee/:employeeId', authenticateToken, async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    
+    const connection = await db.getConnection();
+    
+    const [rows] = await connection.execute(
+      `SELECT m.*, me.status as meeting_status, me.response_time
+       FROM meetings m
+       JOIN meeting_employees me ON m.id = me.meeting_id
+       WHERE me.employee_id = ?
+       ORDER BY m.date_time ASC`,
+      [employeeId]
+    );
+
+    connection.release();
+
+    // Parser les champs JSON
+    const meetings = rows.map(meeting => ({
+      ...meeting,
+      agenda: JSON.parse(meeting.agenda || '[]')
+    }));
+
+    res.json({
+      success: true,
+      data: meetings
+    });
+
+  } catch (error) {
+    console.error('Erreur lors de la récupération des réunions employé:', error);
+    res.status(500).json({ 
+      error: 'Erreur serveur lors de la récupération des réunions',
+      details: error.message
+    });
+  }
+});
+
+// Mettre à jour le statut de participation d'un employé
+router.put('/:meetingId/employee/:employeeId/status', authenticateToken, async (req, res) => {
+  try {
+    const { meetingId, employeeId } = req.params;
+    const { status, notes } = req.body;
+    
+    const validStatuses = ['pending', 'accepted', 'declined', 'tentative'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ 
+        error: 'Statut invalide',
+        validStatuses
+      });
+    }
+
+    const connection = await db.getConnection();
+    
+    const [result] = await connection.execute(
+      `UPDATE meeting_employees 
+       SET status = ?, response_time = CURRENT_TIMESTAMP, notes = ?
+       WHERE meeting_id = ? AND employee_id = ?`,
+      [status, notes || null, meetingId, employeeId]
+    );
+
+    connection.release();
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ 
+        error: 'Assignation non trouvée' 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Statut de participation mis à jour avec succès'
+    });
+
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour du statut:', error);
+    res.status(500).json({ 
+      error: 'Erreur serveur lors de la mise à jour du statut',
       details: error.message
     });
   }

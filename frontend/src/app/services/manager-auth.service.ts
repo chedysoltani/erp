@@ -458,6 +458,35 @@ export class ManagerAuthService {
     });
   }
 
+  // Récupérer les réunions assignées à un employé
+  getEmployeeMeetings(employeeId: number): Observable<any> {
+    const currentManager = this.currentManagerValue;
+    if (!currentManager) {
+      throw new Error('Aucun manager connecté');
+    }
+    
+    return this.http.get<any>(`${environment.apiUrl}/meetings/employee/${employeeId}`, {
+      headers: {
+        'Authorization': `Bearer ${currentManager.token}`
+      }
+    });
+  }
+
+  // Mettre à jour le statut de participation d'un employé à une réunion
+  updateMeetingAttendance(meetingId: number, employeeId: number, status: string, notes?: string): Observable<any> {
+    const currentManager = this.currentManagerValue;
+    if (!currentManager) {
+      throw new Error('Aucun manager connecté');
+    }
+    
+    return this.http.put<any>(`${environment.apiUrl}/meetings/${meetingId}/employee/${employeeId}/status`, 
+      { status, notes }, {
+      headers: {
+        'Authorization': `Bearer ${currentManager.token}`
+      }
+    });
+  }
+
   getUpcomingMeetings(): Observable<any> {
     const currentManager = this.currentManagerValue;
     if (!currentManager) {

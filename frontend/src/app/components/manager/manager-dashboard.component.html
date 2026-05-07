@@ -1603,6 +1603,7 @@
 </div>
 
 <!-- Modal de création de réunion -->
+<!-- Modal de création de réunion -->
 <div *ngIf="showCreateMeetingModal" class="modal-overlay" (click)="closeCreateMeetingModal()">
   <div class="modal-content" (click)="stopPropagation($event)">
     <div class="modal-header">
@@ -1668,14 +1669,31 @@
       </div>
 
       <div class="form-group">
-        <label for="meetingParticipants">Nombre de participants</label>
-        <input 
-          type="number" 
-          id="meetingParticipants" 
-          name="meetingParticipants"
-          [(ngModel)]="newMeeting.participants" 
-          min="1"
-          placeholder="Nombre de participants">
+        <label for="meetingEmployees">Employés concernés</label>
+        <div class="employees-selector">
+          <div class="employee-checkbox" *ngFor="let employee of allUsers">
+            <input 
+              type="checkbox" 
+              id="employee-{{ employee.id }}" 
+              name="employee-{{ employee.id }}"
+              [value]="employee.id"
+              [checked]="newMeeting.selectedEmployees && newMeeting.selectedEmployees.includes(employee.id)"
+              (change)="updateSelectedEmployees(employee.id, $event)"
+              *ngIf="employee.role === 'employee'">
+            <label for="employee-{{ employee.id }}" class="employee-label" *ngIf="employee.role === 'employee'">
+              <div class="employee-avatar" [ngStyle]="{ 'background-color': getAvatarColor(employee.id) }">
+                {{ employee.initials }}
+              </div>
+              <div class="employee-info">
+                <div class="employee-name">{{ employee.name }}</div>
+                <div class="employee-email">{{ employee.email }}</div>
+              </div>
+            </label>
+          </div>
+        </div>
+        <div class="selected-count">
+          {{ newMeeting.selectedEmployees?.length || 0 }} employé(s) sélectionné(s)
+        </div>
       </div>
 
       <div class="form-group">
