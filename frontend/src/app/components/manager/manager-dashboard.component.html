@@ -786,6 +786,16 @@
         </div>
       </div>
 
+      <!-- ══ RECOMMANDATIONS IA ══ -->
+      <div *ngIf="activeSection === 'recommandations'" class="section fade-in">
+        <app-task-recommendation></app-task-recommendation>
+      </div>
+
+      <!-- ══ SIMULATEUR PROJETS ══ -->
+      <div *ngIf="activeSection === 'simulateur'" class="section fade-in">
+        <app-project-simulator></app-project-simulator>
+      </div>
+
       <!-- ══ DOCUMENTS ══ -->
       <div *ngIf="activeSection === 'documents'" class="section fade-in">
         <div class="documents-header">

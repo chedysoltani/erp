@@ -21,12 +21,8 @@ export class TaskRecommendationComponent implements OnInit {
   
   employeeProfiles: EmployeeSkillsProfile[] = [];
   
-  // Options pour les compétences
-  availableSkills = [
-    'JavaScript', 'TypeScript', 'Python', 'Java', 'React', 'Angular', 
-    'Vue.js', 'Node.js', 'Docker', 'Kubernetes', 'MySQL', 
-    'PostgreSQL', 'MongoDB', 'AWS', 'Azure', 'Git'
-  ];
+  // Options pour les compétences (chargées depuis le backend)
+  availableSkills: string[] = [];
   
   constructor(
     private fb: FormBuilder,
@@ -48,6 +44,11 @@ export class TaskRecommendationComponent implements OnInit {
       deadline: ['', Validators.required],
       requirements: this.fb.array([])
     });
+    
+    // Ajouter une compétence par défaut pour faciliter les tests
+    setTimeout(() => {
+      this.addRequirement();
+    }, 100);
   }
 
   get requirementsArray(): FormArray {
@@ -59,9 +60,25 @@ export class TaskRecommendationComponent implements OnInit {
       next: (profiles) => {
         this.employeeProfiles = profiles;
         console.log('Profils employés chargés:', profiles);
+        
+        // Extraire toutes les compétences uniques
+        const allSkills = new Set<string>();
+        profiles.forEach(profile => {
+          profile.skills.forEach(skill => {
+            allSkills.add(skill.name);
+          });
+        });
+        this.availableSkills = Array.from(allSkills).sort();
+        console.log('Compétences disponibles:', this.availableSkills);
       },
       error: (error) => {
         console.error('Erreur lors du chargement des profils:', error);
+        // En cas d'erreur, utiliser la liste par défaut
+        this.availableSkills = [
+          'JavaScript', 'TypeScript', 'Python', 'Java', 'React', 'Angular', 
+          'Vue.js', 'Node.js', 'Docker', 'Kubernetes', 'MySQL', 
+          'PostgreSQL', 'MongoDB', 'AWS', 'Azure', 'Git'
+        ];
       }
     });
   }
@@ -81,8 +98,28 @@ export class TaskRecommendationComponent implements OnInit {
   }
 
   getRecommendations() {
-    if (this.taskForm.invalid || this.requirementsArray.length === 0) {
-      alert('Veuillez remplir tous les champs obligatoires et ajouter au moins une compétence requise');
+    console.log('Validation du formulaire...');
+    console.log('Formulaire valide:', this.taskForm.valid);
+    console.log('Nombre de compétences:', this.requirementsArray.length);
+    console.log('Compétences:', this.requirementsArray.value);
+    
+    if (this.taskForm.invalid) {
+      console.log('Formulaire invalide - détails:', this.taskForm.errors);
+      alert('Veuillez remplir tous les champs obligatoires');
+      return;
+    }
+    
+    if (this.requirementsArray.length === 0) {
+      console.log('Aucune compétence ajoutée');
+      alert('Veuillez ajouter au moins une compétence requise');
+      return;
+    }
+    
+    // Vérifier si chaque compétence est valide
+    const invalidRequirements = this.requirementsArray.controls.filter(control => control.invalid);
+    if (invalidRequirements.length > 0) {
+      console.log('Compétences invalides:', invalidRequirements);
+      alert('Veuillez compléter toutes les informations des compétences requises');
       return;
     }
 

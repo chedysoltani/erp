@@ -4,7 +4,7 @@ import { ManagerAuthService, Manager, Project, Meeting } from '../../services/ma
 
 export type SectionId =
   | 'dashboard' | 'projets' | 'taches' | 'gantt'
-  | 'utilisateurs' | 'reunions' | 'documents';
+  | 'utilisateurs' | 'reunions' | 'recommandations' | 'simulateur' | 'documents';
 
 interface DisplayProject {
   id: number;
@@ -497,6 +497,8 @@ export class ManagerDashboardComponent implements OnInit {
     { id: 'gantt',        label: 'Gantt',        icon: 'bi-calendar3-range',group: 'principal', badge: null },
     { id: 'utilisateurs', label: 'Utilisateurs', icon: 'bi-people',         group: 'equipe',    badge: null },
     { id: 'reunions',     label: 'Réunions',     icon: 'bi-camera-video',   group: 'equipe',    badge: '3'  },
+    { id: 'recommandations', label: 'Recommandations IA', icon: 'bi-cpu', group: 'equipe', badge: null },
+    { id: 'simulateur',    label: 'Simulateur Projets', icon: 'bi-diagram-3', group: 'equipe', badge: null },
     { id: 'documents',  label: 'Documents',  icon: 'bi-folder2-open',   group: 'ressources',badge: null },
   ];
 
@@ -507,6 +509,8 @@ export class ManagerDashboardComponent implements OnInit {
     gantt:        { title: 'Gantt',          sub: 'Planification des projets' },
     utilisateurs: { title: 'Utilisateurs',   sub: 'Gestion des rôles & permissions' },
     reunions:     { title: 'Réunions',       sub: 'Planification & notes' },
+    recommandations: { title: 'Recommandations IA', sub: 'IA d\'affectation de tâches' },
+    simulateur:    { title: 'Simulateur Projets', sub: 'Simulation de projets avec IA' },
     documents:  { title: 'Documents',      sub: 'Gestion des fichiers' },
   };
 

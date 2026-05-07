@@ -54,7 +54,7 @@
           </button>
         </div>
         
-        <div class="requirements-container">
+        <div class="requirements-container" formArrayName="requirements">
           <div class="requirement-item" 
                *ngFor="let requirement of requirementsArray.controls; let i = index" 
                [formGroupName]="i">

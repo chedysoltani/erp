@@ -9,7 +9,8 @@ import {
   TaskRequirement,
   ProjectSimulation,
   Skill,
-  Technology
+  Technology,
+  TimelineItem
 } from '../models/skills.model';
 
 @Injectable({
@@ -22,17 +23,27 @@ export class IARecommendationService {
 
   // Obtenir les recommandations d'employés pour une tâche
   getTaskRecommendations(task: TaskWithRequirements): Observable<EmployeeMatch[]> {
+    console.log('🚀 Tentative d\'obtenir les recommandations depuis le backend...');
+    console.log('📤 Tâche envoyée:', task);
+    console.log('🌐 URL du backend:', `${this.apiUrl}/recommendations/task`);
+    
     return this.http.post(`${this.apiUrl}/recommendations/task`, task).pipe(
       map((response: any) => {
+        console.log('✅ Réponse du backend reçue:', response);
         if (response.success) {
+          console.log('📊 Données du backend utilisées - Nombre de recommandations:', response.data.length);
           return response.data.map((match: any) => this.formatEmployeeMatch(match));
         }
+        console.log('⚠️ Backend a répondu mais sans succès');
         return [];
       }),
       catchError(error => {
-        console.error('Error getting task recommendations:', error);
-        // Fallback vers l'algorithme local
-        return of(this.calculateTaskMatches(task));
+        console.error('❌ Erreur du backend détectée:', error);
+        console.log('🔄 Utilisation de l\'algorithme local en fallback...');
+        console.log('📝 Données mockées utilisées car le backend n\'est pas accessible');
+        const localResults = this.calculateTaskMatches(task);
+        console.log('📊 Résultats de l\'algorithme local:', localResults);
+        return of(localResults);
       })
     );
   }
@@ -72,40 +83,106 @@ export class IARecommendationService {
 
   // Algorithme local de matching compétences-tâches
   private calculateTaskMatches(task: TaskWithRequirements): EmployeeMatch[] {
-    // Pour l'instant, retourner des données mockées
-    // En production, cela utilisera les vrais profils d'employés
-    return [
+    console.log('🔧 Démarrage de l\'algorithme local de matching...');
+    console.log('📋 Compétences requises pour la tâche:', task.requirements);
+    
+    // Pour l'instant, utiliser des données mockées car nous n'avons pas accès aux profils réels
+    // En production, cela utilisera les vrais profils d'employés depuis la base de données
+    const mockEmployees = [
       {
-        employeeId: 1,
+        employeeId: 12,
         employeeName: 'Jean Dupont',
-        matchScore: 85,
-        matchingSkills: ['JavaScript', 'React', 'Node.js'],
-        missingSkills: ['TypeScript'],
+        skills: [
+          { name: 'JavaScript', level: 4 },
+          { name: 'React', level: 4 },
+          { name: 'Node.js', level: 3 },
+          { name: 'TypeScript', level: 2 }
+        ],
         availability: 80,
-        workload: 60,
-        recommendation: 'highly_recommended'
+        workload: 60
       },
       {
-        employeeId: 2,
+        employeeId: 13,
         employeeName: 'Marie Martin',
-        matchScore: 75,
-        matchingSkills: ['JavaScript', 'React'],
-        missingSkills: ['Node.js', 'TypeScript'],
+        skills: [
+          { name: 'JavaScript', level: 3 },
+          { name: 'React', level: 4 },
+          { name: 'Node.js', level: 2 },
+          { name: 'TypeScript', level: 1 }
+        ],
         availability: 90,
-        workload: 40,
-        recommendation: 'recommended'
+        workload: 40
       },
       {
-        employeeId: 3,
+        employeeId: 14,
         employeeName: 'Pierre Durand',
-        matchScore: 60,
-        matchingSkills: ['Node.js'],
-        missingSkills: ['JavaScript', 'React', 'TypeScript'],
+        skills: [
+          { name: 'JavaScript', level: 2 },
+          { name: 'React', level: 2 },
+          { name: 'Node.js', level: 4 },
+          { name: 'TypeScript', level: 1 }
+        ],
         availability: 70,
-        workload: 80,
-        recommendation: 'consider'
+        workload: 80
       }
     ];
+
+    const results = mockEmployees.map(employee => {
+      console.log(`👤 Analyse de l'employé: ${employee.employeeName}`);
+      const matchResult = this.calculateEmployeeTaskMatch(employee, task);
+      console.log(`📊 Score pour ${employee.employeeName}: ${matchResult.score}%`);
+      console.log(`✅ Compétences correspondantes: ${matchResult.matchingSkills.join(', ')}`);
+      console.log(`❌ Compétences manquantes: ${matchResult.missingSkills.join(', ')}`);
+      
+      return {
+        employeeId: employee.employeeId,
+        employeeName: employee.employeeName,
+        matchScore: matchResult.score,
+        matchingSkills: matchResult.matchingSkills,
+        missingSkills: matchResult.missingSkills,
+        availability: employee.availability,
+        workload: employee.workload,
+        recommendation: this.getRecommendationFromScore(matchResult.score)
+      };
+    }).sort((a, b) => b.matchScore - a.matchScore);
+    
+    console.log('🏆 Résultats finaux triés par score:', results);
+    return results;
+  }
+
+  // Calculer le matching entre un employé et une tâche
+  private calculateEmployeeTaskMatch(employee: any, task: TaskWithRequirements): { score: number; matchingSkills: string[]; missingSkills: string[] } {
+    const matchingSkills: string[] = [];
+    const missingSkills: string[] = [];
+    let totalScore = 0;
+    let maxScore = 0;
+
+    task.requirements.forEach(requirement => {
+      const employeeSkill = employee.skills.find((s: any) => s.name === requirement.skillName);
+      const importanceWeight = requirement.importance === 'critical' ? 30 : 
+                             requirement.importance === 'high' ? 20 : 
+                             requirement.importance === 'medium' ? 10 : 5;
+      maxScore += importanceWeight;
+
+      if (employeeSkill) {
+        const skillScore = Math.min(employeeSkill.level, requirement.requiredLevel) / requirement.requiredLevel;
+        totalScore += skillScore * importanceWeight;
+        matchingSkills.push(requirement.skillName);
+      } else {
+        missingSkills.push(requirement.skillName);
+      }
+    });
+
+    const score = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
+    return { score, matchingSkills, missingSkills };
+  }
+
+  // Déterminer la recommandation basée sur le score
+  private getRecommendationFromScore(score: number): 'highly_recommended' | 'recommended' | 'consider' | 'not_recommended' {
+    if (score >= 80) return 'highly_recommended';
+    if (score >= 60) return 'recommended';
+    if (score >= 40) return 'consider';
+    return 'not_recommended';
   }
 
   // Algorithme local de simulation de projet
@@ -168,8 +245,8 @@ export class IARecommendationService {
   }
 
   // Générer une timeline pour le projet
-  private generateTimeline(tasks: TaskWithRequirements[], totalDays: number): any[] {
-    const timeline = [];
+  private generateTimeline(tasks: TaskWithRequirements[], totalDays: number): TimelineItem[] {
+    const timeline: TimelineItem[] = [];
     const daysPerTask = Math.floor(totalDays / tasks.length);
     
     tasks.forEach((task, index) => {

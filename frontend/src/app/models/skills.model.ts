@@ -51,6 +51,15 @@ export interface TaskWithRequirements {
   deadline: Date;
 }
 
+export interface TimelineItem {
+  taskId: number;
+  taskTitle: string;
+  startDate: Date;
+  endDate: Date;
+  duration: number;
+  priority: 'low' | 'medium' | 'high';
+}
+
 export interface EmployeeMatch {
   employeeId: number;
   employeeName: string;
@@ -71,7 +80,7 @@ export interface ProjectSimulation {
   availableEmployees: number[];
   tasks: TaskWithRequirements[];
   generatedPlan: {
-    timeline: any[];
+    timeline: TimelineItem[];
     taskAssignments: { taskId: number; employeeId: number }[];
     estimatedCompletion: Date;
     riskLevel: 'low' | 'medium' | 'high';
