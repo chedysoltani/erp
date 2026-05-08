@@ -44,7 +44,7 @@
           </button>
         </div>
         
-        <div class="objectives-container">
+        <div class="objectives-container" formArrayName="objectives">
           <div class="objective-item" 
                *ngFor="let objective of objectivesArray.controls; let i = index" 
                [formGroupName]="i">
@@ -97,7 +97,7 @@
           </button>
         </div>
         
-        <div class="tasks-container">
+        <div class="tasks-container" formArrayName="tasks">
           <div class="task-item" 
                *ngFor="let task of tasksArray.controls; let taskIndex = index" 
                [formGroupName]="taskIndex">
@@ -129,6 +129,21 @@
             
             <!-- Compétences requises pour la tâche -->
             <div class="task-requirements">
+            <style>
+              .invalid-requirement {
+                background-color: #fee2e2 !important;
+                border: 1px solid #ef4444 !important;
+              }
+              .btn-warning {
+                background-color: #f59e0b !important;
+                color: white !important;
+                border: none !important;
+                padding: 4px 8px !important;
+                border-radius: 4px !important;
+                font-size: 12px !important;
+                margin-top: 8px !important;
+              }
+            </style>
               <div class="requirements-header">
                 <h5>Compétences requises</h5>
                 <button type="button" class="btn-small" 
@@ -138,25 +153,27 @@
               </div>
               
               <div class="requirements-list">
+                <div class="requirement-info" *ngIf="getTaskRequirements(taskIndex).length === 0">
+                  <span>Aucune compétence requise</span>
+                </div>
                 <div class="requirement-item" 
-                     *ngFor="let requirement of getTaskRequirements(taskIndex).controls; let reqIndex = index" 
-                     [formGroupName]="reqIndex">
-                  <select formControlName="skillName" class="skill-select">
-                    <option value="">Compétence</option>
-                    <option *ngFor="let skill of availableSkills" [value]="skill">
-                      {{ skill }}
-                    </option>
-                  </select>
-                  <input type="range" formControlName="requiredLevel" min="1" max="5" class="level-range">
-                  <select formControlName="importance" class="importance-select">
-                    <option value="low">Faible</option>
-                    <option value="medium">Moyenne</option>
-                    <option value="high">Élevée</option>
-                    <option value="critical">Critique</option>
-                  </select>
-                  <button type="button" class="btn-remove-small" 
-                          (click)="removeTaskRequirement(taskIndex, reqIndex)">
-                    <i class="bi bi-x"></i>
+                     *ngFor="let requirement of getTaskRequirements(taskIndex).controls; let reqIndex = index">
+                  <div class="requirement-summary" 
+                       [class.invalid-requirement]="!requirement.value.skillName">
+                    <strong>{{ requirement.value.skillName || 'Non spécifiée' }}</strong>
+                    <span>Niveau: {{ requirement.value.requiredLevel }}/5</span>
+                    <span>Importance: {{ requirement.value.importance }}</span>
+                    <button type="button" class="btn-remove-small" 
+                            (click)="removeTaskRequirement(taskIndex, reqIndex)">
+                      <i class="bi bi-x"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="requirement-actions" *ngIf="getTaskRequirements(taskIndex).length > 0">
+                  <button type="button" class="btn-small btn-warning" 
+                          (click)="clearEmptyRequirements(taskIndex)">
+                    <i class="bi bi-trash"></i>
+                    Supprimer les compétences vides
                   </button>
                 </div>
               </div>
@@ -198,9 +215,9 @@
     <div class="results-header">
       <h3>Résultats de la Simulation</h3>
       <div class="risk-indicator" 
-           [style.background-color]="getRiskLevelColor(simulationResult.riskLevel)">
+           [style.background-color]="getRiskLevelColor(simulationResult?.riskLevel)">
         <i class="bi bi-shield-exclamation"></i>
-        Risque: {{ getRiskLevelLabel(simulationResult.riskLevel) }}
+        Risque: {{ getRiskLevelLabel(simulationResult?.riskLevel) }}
       </div>
     </div>
 
@@ -208,11 +225,11 @@
     <div class="results-summary">
       <div class="summary-card">
         <h4>📅 Planning Généré</h4>
-        <p>Date de fin estimée: <strong>{{ formatDate(simulationResult.estimatedCompletion) }}</strong></p>
+        <p>Date de fin estimée: <strong>{{ formatDate(simulationResult?.estimatedCompletion) }}</strong></p>
       </div>
       <div class="summary-card">
         <h4>👥 Affectations</h4>
-        <p><strong>{{ simulationResult.taskAssignments?.length || 0 }}</strong> tâches assignées</p>
+        <p><strong>{{ simulationResult?.taskAssignments?.length || 0 }}</strong> tâches assignées</p>
       </div>
     </div>
 
@@ -221,7 +238,7 @@
       <h4>Timeline du Projet</h4>
       <div class="timeline-container">
         <div class="timeline-item" 
-             *ngFor="let item of simulationResult.timeline">
+             *ngFor="let item of simulationResult?.timeline">
           <div class="timeline-date">
             <div class="date-start">{{ formatDate(item.startDate) }}</div>
             <div class="date-end">{{ formatDate(item.endDate) }}</div>
@@ -239,11 +256,11 @@
     </div>
 
     <!-- Recommandations -->
-    <div class="recommendations-section" *ngIf="simulationResult.recommendations?.length > 0">
+    <div class="recommendations-section" *ngIf="simulationResult?.recommendations?.length > 0">
       <h4>💡 Recommandations IA</h4>
       <div class="recommendations-list">
         <div class="recommendation-item" 
-             *ngFor="let recommendation of simulationResult.recommendations">
+             *ngFor="let recommendation of simulationResult?.recommendations">
           <i class="bi bi-lightbulb"></i>
           <span>{{ recommendation }}</span>
         </div>

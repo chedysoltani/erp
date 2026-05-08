@@ -297,6 +297,7 @@ export class IARecommendationService {
   private formatSkillsProfile(data: any): EmployeeSkillsProfile {
     return {
       employeeId: data.employeeId,
+      employeeName: data.employeeName,
       skills: data.skills || [],
       technologies: data.technologies || [],
       specialities: data.specialities || [],

@@ -84,6 +84,9 @@ router.get('/employees/skills-profiles', async (req, res) => {
     
     console.log(`✅ ${profiles.length} profils d'employés trouvés`);
     
+    // Log pour vérifier les données envoyées
+    console.log('🔍 Données envoyées au frontend (premier profil):', profiles[0]);
+    
     res.json({
       success: true,
       data: profiles,
@@ -112,6 +115,8 @@ router.post('/recommendations/task', async (req, res) => {
       SELECT 
         u.id as employeeId,
         CONCAT(u.prenom, ' ', u.nom) as employeeName,
+        u.prenom,
+        u.nom,
         JSON_ARRAYAGG(
           JSON_OBJECT(
             'name', es.name,
@@ -211,8 +216,42 @@ router.post('/simulate-project', async (req, res) => {
   try {
     console.log('🏗️ Requête de simulation de projet');
     const project = req.body;
+    console.log('📋 Projet reçu:', project);
     
-    // Simulation simple de timeline
+    // Récupérer les vrais employés avec leurs compétences depuis la base
+    const employeeProfilesQuery = `
+      SELECT 
+        u.id as employeeId,
+        u.prenom,
+        u.nom,
+        CONCAT(u.prenom, ' ', u.nom) as employeeName,
+        JSON_ARRAYAGG(
+          JSON_OBJECT(
+            'name', es.name,
+            'level', es.level,
+            'validated', es.validated
+          )
+        ) as skills
+      FROM users u
+      LEFT JOIN employee_skills es ON u.id = es.employee_id
+      WHERE u.role = 'employee' AND u.id IN (${project.availableEmployees.join(',')})
+      GROUP BY u.id, u.prenom, u.nom
+    `;
+    
+    const employeeResults = await db.query(employeeProfilesQuery);
+    
+    // Parser les compétences et créer une structure utilisable
+    const availableEmployees = employeeResults.map(employee => {
+      const skills = employee.skills ? (typeof employee.skills === 'string' ? JSON.parse(employee.skills) : employee.skills) : [];
+      return {
+        employeeId: employee.employeeId,
+        employeeName: employee.employeeName,
+        skills: skills
+      };
+    });
+    
+    console.log('👥 Employés disponibles pour simulation:', availableEmployees);
+    
     const timeline = [];
     const daysPerTask = Math.floor(project.duration / project.tasks.length);
     
@@ -230,11 +269,51 @@ router.post('/simulate-project', async (req, res) => {
       });
     });
     
-    // Simulation des assignations de tâches
-    const taskAssignments = project.tasks.map(task => ({
-      taskId: task.id,
-      employeeId: project.availableEmployees[0] || 1
-    }));
+    // Simulation des assignations de tâches - utiliser les vraies données des employés
+    const taskAssignments = project.tasks.map((task, index) => {
+      if (availableEmployees.length === 0) {
+        return {
+          taskId: task.id,
+          employeeId: 1 // Fallback
+        };
+      }
+      
+      let bestEmployee = availableEmployees[0];
+      
+      // Si la tâche a des requirements, trouver le meilleur employé
+      if (task.requirements && task.requirements.length > 0) {
+        let bestScore = -1;
+        
+        availableEmployees.forEach(employee => {
+          let matchScore = 0;
+          task.requirements.forEach(req => {
+            const hasSkill = employee.skills.some(skill => skill.name === req.skillName);
+            if (hasSkill) {
+              matchScore += req.importance === 'critical' ? 30 : 
+                           req.importance === 'high' ? 20 : 
+                           req.importance === 'medium' ? 10 : 5;
+            }
+          });
+          
+          if (matchScore > bestScore) {
+            bestScore = matchScore;
+            bestEmployee = employee;
+          }
+        });
+        
+        console.log(`📊 Tâche "${task.title}" assignée à ${bestEmployee.employeeName} avec score ${bestScore}`);
+      } else {
+        // Round-robin si pas de requirements
+        bestEmployee = availableEmployees[index % availableEmployees.length];
+        console.log(`📊 Tâche "${task.title}" assignée à ${bestEmployee.employeeName} (round-robin)`);
+      }
+      
+      return {
+        taskId: task.id,
+        employeeId: bestEmployee.employeeId,
+        employeeName: bestEmployee.employeeName
+      };
+    });
     
     // Calcul du niveau de risque
     let riskScore = 0;
@@ -267,12 +346,25 @@ router.post('/simulate-project', async (req, res) => {
       recommendations.push('Le projet semble réalisable dans les délais prévus');
     }
     
+    // Logs détaillés pour le débogage
+    console.log('📊 Résultats de la simulation:');
+    console.log(`  - Nombre de tâches: ${project.tasks.length}`);
+    console.log(`  - Nombre d'employés disponibles: ${availableEmployees.length}`);
+    console.log(`  - Nombre d'assignations: ${taskAssignments.length}`);
+    console.log(`  - Assignations détaillées:`, taskAssignments);
+    
     const simulationResult = {
       timeline,
       taskAssignments,
       estimatedCompletion: new Date(Date.now() + (project.duration * 24 * 60 * 60 * 1000)),
       riskLevel,
-      recommendations
+      recommendations,
+      debugInfo: {
+        totalTasks: project.tasks.length,
+        totalEmployees: availableEmployees.length,
+        totalAssignments: taskAssignments.length,
+        availableEmployees: availableEmployees.map(emp => ({ id: emp.employeeId, name: emp.employeeName }))
+      }
     };
     
     console.log('✅ Simulation de projet terminée');

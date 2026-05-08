@@ -25,6 +25,7 @@ export interface Speciality {
 
 export interface EmployeeSkillsProfile {
   employeeId: number;
+  employeeName?: string;
   skills: Skill[];
   technologies: Technology[];
   specialities: Speciality[];
