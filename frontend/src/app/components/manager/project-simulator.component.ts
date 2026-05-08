@@ -303,6 +303,7 @@ export class ProjectSimulatorComponent implements OnInit {
         console.log(`  - ${results?.taskAssignments?.length || 0} tâches assignées`);
         console.log(`  - Risque: ${results?.riskLevel}`);
         console.log(`  - Date de fin: ${results?.estimatedCompletion}`);
+        console.log(`  - Recommandations:`, results?.recommendations);
         
         if (results?.debugInfo) {
           console.log('🔍 Debug info:');
@@ -453,6 +454,56 @@ export class ProjectSimulatorComponent implements OnInit {
   isEmployeeSelected(employeeId: number): boolean {
     const selectedEmployees = this.projectForm.value.availableEmployees || [];
     return selectedEmployees.includes(employeeId);
+  }
+
+  // Obtenir le titre d'une tâche depuis son ID
+  getTaskTitle(taskId: number): string {
+    const tasks = this.projectForm.value.tasks || [];
+    const task = tasks.find((t: any) => t.id === taskId);
+    return task?.title || `Tâche ${taskId}`;
+  }
+
+  // Obtenir les compétences d'un employé
+  getEmployeeSkills(employeeId: number): any[] {
+    const employee = this.employeeProfiles.find(profile => profile.employeeId === employeeId);
+    if (employee && employee.skills) {
+      // Retourner les 5 meilleures compétences
+      return employee.skills
+        .sort((a, b) => b.level - a.level)
+        .slice(0, 5);
+    }
+    return [];
+  }
+
+  // Obtenir les employés sélectionnés
+  getSelectedEmployees(): any[] {
+    const selectedIds = this.projectForm.value.availableEmployees || [];
+    return this.availableEmployees.filter(emp => selectedIds.includes(emp.id));
+  }
+
+  // Obtenir les top compétences d'un employé
+  getEmployeeTopSkills(employeeId: number, count: number): any[] {
+    const employee = this.employeeProfiles.find(profile => profile.employeeId === employeeId);
+    if (employee && employee.skills) {
+      return employee.skills
+        .sort((a, b) => b.level - a.level)
+        .slice(0, count);
+    }
+    return [];
+  }
+
+  // Obtenir la durée d'une tâche
+  getTaskDuration(taskId: number): number {
+    const tasks = this.projectForm.value.tasks || [];
+    const task = tasks.find((t: any) => t.id === taskId);
+    return task?.estimatedHours || 8;
+  }
+
+  // Obtenir la priorité d'une tâche
+  getTaskPriority(taskId: number): string {
+    const tasks = this.projectForm.value.tasks || [];
+    const task = tasks.find((t: any) => t.id === taskId);
+    return task?.priority || 'medium';
   }
 
   toggleEmployeeSelection(employeeId: number) {

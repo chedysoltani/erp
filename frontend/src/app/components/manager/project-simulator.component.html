@@ -143,6 +143,150 @@
                 font-size: 12px !important;
                 margin-top: 8px !important;
               }
+              
+              .assignments-details {
+                margin: 20px 0;
+              }
+              
+              .assignment-item {
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                padding: 16px;
+                margin-bottom: 12px;
+              }
+              
+              .assignment-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 12px;
+              }
+              
+              .assignment-header h5 {
+                margin: 0;
+                color: #1f2937;
+              }
+              
+              .employee-name {
+                background: #3b82f6;
+                color: white;
+                padding: 4px 12px;
+                border-radius: 16px;
+                font-size: 14px;
+                font-weight: 500;
+              }
+              
+              .employee-skills {
+                margin-top: 8px;
+              }
+              
+              .skills-label {
+                display: block;
+                font-weight: 600;
+                color: #374151;
+                margin-bottom: 8px;
+              }
+              
+              .skills-list {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+              }
+              
+              .skill-badge {
+                background: #10b981;
+                color: white;
+                padding: 4px 8px;
+                border-radius: 12px;
+                font-size: 12px;
+                font-weight: 500;
+              }
+              
+              .team-summary {
+                background: #f0f9ff;
+                border: 1px solid #0ea5e9;
+                border-radius: 8px;
+                padding: 16px;
+                margin-bottom: 20px;
+              }
+              
+              .team-summary h5 {
+                margin: 0 0 12px 0;
+                color: #0c4a6e;
+              }
+              
+              .team-members {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                gap: 12px;
+              }
+              
+              .team-member {
+                background: white;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                padding: 12px;
+              }
+              
+              .member-info {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 8px;
+              }
+              
+              .member-role {
+                background: #6366f1;
+                color: white;
+                padding: 2px 8px;
+                border-radius: 12px;
+                font-size: 11px;
+              }
+              
+              .member-skills {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+              }
+              
+              .skill-small {
+                background: #f3f4f6;
+                color: #374151;
+                padding: 2px 6px;
+                border-radius: 8px;
+                font-size: 11px;
+              }
+              
+              .assignments-list h5 {
+                margin: 20px 0 12px 0;
+                color: #1f2937;
+              }
+              
+              .assignment-header h6 {
+                margin: 0;
+                color: #1f2937;
+                font-size: 16px;
+              }
+              
+              .task-details {
+                margin-top: 12px;
+              }
+              
+              .task-info {
+                display: flex;
+                gap: 12px;
+                margin-bottom: 8px;
+              }
+              
+              .task-duration, .task-priority {
+                background: #fef3c7;
+                color: #92400e;
+                padding: 4px 8px;
+                border-radius: 12px;
+                font-size: 12px;
+                font-weight: 500;
+              }
             </style>
               <div class="requirements-header">
                 <h5>Compétences requises</h5>
@@ -233,6 +377,58 @@
       </div>
     </div>
 
+    <!-- Détails des affectations avec compétences -->
+    <div class="assignments-details" *ngIf="simulationResult?.taskAssignments?.length > 0">
+      <h4>📋 Détails des Affectations</h4>
+      
+      <!-- Résumé de l'équipe -->
+      <div class="team-summary">
+        <h5>👥 Équipe Sélectionnée</h5>
+        <div class="team-members">
+          <div class="team-member" 
+               *ngFor="let employee of getSelectedEmployees()">
+            <div class="member-info">
+              <strong>{{ employee.name }}</strong>
+              <span class="member-role">{{ employee.role }}</span>
+            </div>
+            <div class="member-skills">
+              <span class="skill-small" 
+                    *ngFor="let skill of getEmployeeTopSkills(employee.id, 3)">
+                {{ skill.name }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Affectations détaillées -->
+      <div class="assignments-list">
+        <h5>📝 Affectations des Tâches</h5>
+        <div class="assignment-item" 
+             *ngFor="let assignment of simulationResult?.taskAssignments">
+          <div class="assignment-header">
+            <h6>{{ getTaskTitle(assignment.taskId) }}</h6>
+            <span class="employee-name">👤 {{ assignment.employeeName }}</span>
+          </div>
+          <div class="task-details">
+            <div class="task-info">
+              <span class="task-duration">⏱️ {{ getTaskDuration(assignment.taskId) }}h</span>
+              <span class="task-priority">🎯 {{ getTaskPriority(assignment.taskId) }}</span>
+            </div>
+            <div class="employee-skills">
+              <span class="skills-label">🛠️ Compétences utilisées:</span>
+              <div class="skills-list">
+                <span class="skill-badge" 
+                      *ngFor="let skill of getEmployeeSkills(assignment.employeeId)">
+                  {{ skill.name }} (Niv.{{ skill.level }})
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Timeline -->
     <div class="timeline-section">
       <h4>Timeline du Projet</h4>
@@ -256,7 +452,7 @@
     </div>
 
     <!-- Recommandations -->
-    <div class="recommendations-section" *ngIf="simulationResult?.recommendations?.length > 0">
+    <div class="recommendations-section" *ngIf="simulationResult?.recommendations && simulationResult?.recommendations?.length > 0">
       <h4>💡 Recommandations IA</h4>
       <div class="recommendations-list">
         <div class="recommendation-item" 
@@ -266,5 +462,8 @@
         </div>
       </div>
     </div>
+    
+    <!-- Debug des recommandations -->
+   
   </div>
 </div>

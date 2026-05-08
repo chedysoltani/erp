@@ -337,13 +337,38 @@ router.post('/simulate-project', async (req, res) => {
     
     // Générer des recommandations
     const recommendations = [];
+    
+    // Recommandations basées sur le risque
     if (riskLevel === 'high') {
       recommendations.push('Considérez diviser le projet en plusieurs phases plus petites');
       recommendations.push('Prévoyez des points de contrôle réguliers');
+      recommendations.push('Allouez des ressources supplémentaires en cas de retard');
     } else if (riskLevel === 'medium') {
       recommendations.push('Surveillez attentivement le progrès hebdomadaire');
+      recommendations.push('Préparez un plan de contingence');
     } else {
       recommendations.push('Le projet semble réalisable dans les délais prévus');
+    }
+    
+    // Recommandations basées sur l'équipe
+    if (availableEmployees.length > 1) {
+      recommendations.push(`Planifiez une réunion de lancement avec l'équipe de ${availableEmployees.length} personnes`);
+      recommendations.push('Mettez en place un système de communication quotidien');
+    } else {
+      recommendations.push('Assurez-vous que l\'employé assigné dispose de tout le nécessaire');
+    }
+    
+    // Recommandations basées sur les tâches
+    if (project.tasks.length === 1) {
+      recommendations.push('Décomposez la tâche principale en sous-tâches pour un meilleur suivi');
+    } else if (project.tasks.length > 3) {
+      recommendations.push('Organisez des revues intermédiaires toutes les semaines');
+    }
+    
+    // Recommandations basées sur la durée
+    if (project.duration > 20) {
+      recommendations.push('Planifiez une réunion de suivi la semaine prochaine');
+      recommendations.push('Préparez un rapport d\'avancement à mi-parcours');
     }
     
     // Logs détaillés pour le débogage
