@@ -1,51 +1,72 @@
-<div class="employee-login-container">
-  <div class="login-card">
-    <div class="login-header">
-      <h1 class="login-title">Connexion Employé</h1>
-      <p class="login-subtitle">Accédez à votre espace de travail</p>
+<div class="auth-page employee-theme">
+  <div class="background-blobs">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+  </div>
+
+  <div class="auth-container fade-in">
+    <div class="auth-card glass-card">
+      <!-- Header -->
+      <div class="auth-header">
+        <div class="logo-wrap">
+          <div class="logo-icon">
+            <i class="bi bi-person-badge"></i>
+          </div>
+          <span class="logo-text">SIT ERP</span>
+        </div>
+        <h1 class="auth-title">Espace Employé</h1>
+        <p class="auth-subtitle">Connectez-vous pour accéder à vos missions</p>
+      </div>
+
+      <!-- Alerts -->
+      <div *ngIf="errorMessage" class="auth-alert error">
+        <i class="bi bi-exclamation-circle"></i>
+        <span>{{ errorMessage }}</span>
+      </div>
+
+      <!-- Login Form -->
+      <form class="auth-form" (ngSubmit)="login()">
+        <div class="input-group">
+          <label>Email professionnel</label>
+          <div class="input-field">
+            <i class="bi bi-envelope"></i>
+            <input 
+              type="email" 
+              [(ngModel)]="email" 
+              name="email"
+              placeholder="nom@entreprise.com"
+              required>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label>Mot de passe</label>
+          <div class="input-field">
+            <i class="bi bi-shield-lock"></i>
+            <input 
+              type="password" 
+              [(ngModel)]="password" 
+              name="password"
+              placeholder="••••••••"
+              required>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-premium btn-secondary w-full" [disabled]="isLoading">
+          <span *ngIf="!isLoading">Accéder à mon espace</span>
+          <span *ngIf="isLoading" class="spinner"></span>
+          <i *ngIf="!isLoading" class="bi bi-box-arrow-in-right"></i>
+        </button>
+      </form>
+
+      <div class="auth-footer">
+        Vous êtes un manager ?
+        <button (click)="goToManagerLogin()">Accès Portail</button>
+      </div>
     </div>
 
-    <form class="login-form" (ngSubmit)="login()">
-      <div class="form-group">
-        <label for="email">Email</label>
-        <input 
-          type="email" 
-          id="email" 
-          [(ngModel)]="email" 
-          name="email"
-          placeholder="employe@entreprise.com"
-          required>
-      </div>
-
-      <div class="form-group">
-        <label for="password">Mot de passe</label>
-        <input 
-          type="password" 
-          id="password" 
-          [(ngModel)]="password" 
-          name="password"
-          placeholder="••••••••"
-          required>
-      </div>
-
-      <div class="error-message" *ngIf="errorMessage">
-        {{ errorMessage }}
-      </div>
-
-      <button 
-        type="submit" 
-        class="login-btn" 
-        [disabled]="isLoading">
-        <span *ngIf="!isLoading">Se connecter</span>
-        <span *ngIf="isLoading">Connexion...</span>
-      </button>
-    </form>
-
-    <div class="login-footer">
-      <p>Vous êtes un manager ?</p>
-      <button class="switch-btn" (click)="goToManagerLogin()">
-        Accès Manager
-      </button>
+    <div class="back-link">
+      <a href="/"><i class="bi bi-arrow-left"></i> Retour à l'accueil</a>
     </div>
   </div>
 </div>

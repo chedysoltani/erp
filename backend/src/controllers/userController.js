@@ -1,4 +1,6 @@
 const User = require('../models/User');
+const jwt = require('jsonwebtoken');
+
 
 class UserController {
   static async getAllUsers(req, res) {
@@ -209,10 +211,18 @@ class UserController {
       
       console.log('User role:', userRole, 'for user:', user.email, 'original role:', user.role);
 
+      // Générer un token JWT
+      const token = jwt.sign(
+        { id: user.id, email: user.email, role: userRole },
+        process.env.JWT_SECRET || 'sit_erp_secret_key_2024',
+        { expiresIn: '24h' }
+      );
+
       // Retourner les informations utilisateur (sans le mot de passe)
       res.json({
         success: true,
         message: 'Connexion réussie',
+        token: token,
         data: {
           id: user.id,
           nom: user.nom,

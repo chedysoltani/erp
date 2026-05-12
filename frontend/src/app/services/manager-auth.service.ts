@@ -83,30 +83,29 @@ export class ManagerAuthService {
   }
 
   login(email: string, password: string): Observable<Manager> {
-    // Vérifier les identifiants fixes pour le manager
-    if (email === 'sofienne.manager@sit.com.tn' && password === 'password123') {
-      const manager: Manager = {
-        id: 1,
-        nom: 'Sofiene',
-        prenom: 'Manager',
-        email: 'sofienne.manager@sit.com.tn',
-        role: 'manager',
-        telephone: '+216 71 123 456',
-        date_creation: '2026-03-16T18:07:37.000Z',
-        token: 'manager-token-' + Date.now()
-      };
-      
-      localStorage.setItem('currentManager', JSON.stringify(manager));
-      this.currentManagerSubject.next(manager);
-      console.log('Manager authentifié:', manager);
-      
-      return of(manager).pipe(delay(500));
-    } else {
-      // Refuser l'accès pour tous les autres
-      return throwError(() => new Error('Accès refusé. Seul le manager sofienne.manager@sit.com.tn peut accéder au dashboard.'));
-    }
+    return this.http.post<any>(`${environment.apiUrl}/users/login`, { email, password }).pipe(
+      map(response => {
+        if (response.success && response.data) {
+          const manager: Manager = {
+            ...response.data,
+            token: response.token
+          };
+
+          if (manager.role !== 'manager' && manager.role !== 'admin') {
+            throw new Error('Accès réservé aux managers.');
+          }
+
+          localStorage.setItem('currentManager', JSON.stringify(manager));
+          localStorage.setItem('managerToken', response.token); // Pour DocumentsService
+          this.currentManagerSubject.next(manager);
+          return manager;
+        } else {
+          throw new Error(response.message || 'Erreur d\'authentification');
+        }
+      })
+    );
   }
-  
+
 
   logout(): void {
     localStorage.removeItem('currentManager');
@@ -124,7 +123,7 @@ export class ManagerAuthService {
       ...managerData,
       role: 'manager'
     };
-    
+
     return this.http.post(`${environment.apiUrl}/users/register`, dataWithRole);
   }
 
@@ -388,12 +387,12 @@ export class ManagerAuthService {
     if (!currentManager) {
       throw new Error('Aucun manager connecté');
     }
-    
+
     let params = new URLSearchParams();
     if (period) params.append('period', period);
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
-    
+
     return this.http.get<any>(`${environment.apiUrl}/timesheet/period/manager/${currentManager.id}?${params.toString()}`, {
       headers: {
         'Authorization': `Bearer ${currentManager.token}`
@@ -407,12 +406,12 @@ export class ManagerAuthService {
     if (!currentManager) {
       throw new Error('Aucun manager connecté');
     }
-    
+
     const meetingData = {
       ...meeting,
       creator_id: currentManager.id
     };
-    
+
     return this.http.post<any>(`${environment.apiUrl}/meetings`, meetingData, {
       headers: {
         'Authorization': `Bearer ${currentManager.token}`
@@ -437,7 +436,7 @@ export class ManagerAuthService {
     if (!currentManager) {
       throw new Error('Aucun manager connecté');
     }
-    
+
     return this.http.put<any>(`${environment.apiUrl}/meetings/${meetingId}`, meeting, {
       headers: {
         'Authorization': `Bearer ${currentManager.token}`
@@ -450,7 +449,7 @@ export class ManagerAuthService {
     if (!currentManager) {
       throw new Error('Aucun manager connecté');
     }
-    
+
     return this.http.delete<any>(`${environment.apiUrl}/meetings/${meetingId}`, {
       headers: {
         'Authorization': `Bearer ${currentManager.token}`
@@ -464,7 +463,7 @@ export class ManagerAuthService {
     if (!currentManager) {
       throw new Error('Aucun manager connecté');
     }
-    
+
     return this.http.get<any>(`${environment.apiUrl}/meetings/employee/${employeeId}`, {
       headers: {
         'Authorization': `Bearer ${currentManager.token}`
@@ -478,8 +477,8 @@ export class ManagerAuthService {
     if (!currentManager) {
       throw new Error('Aucun manager connecté');
     }
-    
-    return this.http.put<any>(`${environment.apiUrl}/meetings/${meetingId}/employee/${employeeId}/status`, 
+
+    return this.http.put<any>(`${environment.apiUrl}/meetings/${meetingId}/employee/${employeeId}/status`,
       { status, notes }, {
       headers: {
         'Authorization': `Bearer ${currentManager.token}`

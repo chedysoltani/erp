@@ -47,13 +47,13 @@ export class EmployeeAuthService {
         map(response => {
           // Vérifier si l'utilisateur est un employé
           if (response.success && response.data && response.data.role === 'employee') {
-            // Créer un token simple pour la session
             const employee: Employee = {
               ...response.data,
-              manager_id: 1, // Par défaut, tous les employés sont sous le manager principal
-              token: 'employee-token-' + Date.now() + '-' + response.data.id
+              manager_id: 1, // Par défaut
+              token: response.token
             };
             localStorage.setItem('currentEmployee', JSON.stringify(employee));
+            localStorage.setItem('employeeToken', response.token); // Pour DocumentsService
             this.currentEmployeeSubject.next(employee);
             console.log('Employé authentifié:', employee);
             return employee;

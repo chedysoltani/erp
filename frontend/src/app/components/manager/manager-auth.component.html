@@ -1,204 +1,103 @@
-<div class="manager-auth-container">
-  <div class="auth-card">
-    <!-- Header -->
-    <div class="auth-header">
-      <div class="logo-section">
-        <div class="logo-hex">
-          <i class="bi bi-briefcase-fill"></i>
-        </div>
-        <div class="logo-text">
-          <h1 class="logo-name">SIT ERP</h1>
-          <span class="logo-badge">Manager</span>
-        </div>
-      </div>
-      <h2 class="auth-title">
-        {{ isSignIn ? 'Connexion Manager' : 'Créer un compte Manager' }}
-      </h2>
-      <p class="auth-subtitle">
-        {{ isSignIn ? 'Accédez à votre tableau de bord' : 'Rejoignez la plateforme de gestion' }}
-      </p>
-    </div>
+<div class="auth-page manager-theme">
+  <div class="background-blobs">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+  </div>
 
-    <!-- Messages -->
-    <div *ngIf="errorMessage" class="alert alert-danger">
-      <i class="bi bi-exclamation-triangle"></i>
-      {{ errorMessage }}
-    </div>
-
-    <div *ngIf="successMessage" class="alert alert-success">
-      <i class="bi bi-check-circle"></i>
-      {{ successMessage }}
-    </div>
-
-    <!-- Formulaire de connexion -->
-    <form *ngIf="isSignIn" class="auth-form" [formGroup]="loginForm" (ngSubmit)="onLogin()">
-      <div class="form-group">
-        <label for="login-email">Email professionnel</label>
-        <div class="input-wrapper">
-          <i class="bi bi-envelope"></i>
-          <input 
-            type="email" 
-            id="login-email" 
-            formControlName="email"
-            placeholder="manager@entreprise.com"
-            [class.error]="loginControls['email'].invalid && loginControls['email'].touched"
-            required>
-        </div>
-        <span *ngIf="loginControls['email'].invalid && loginControls['email'].touched" class="error-message">
-          {{ loginControls['email'].errors?.['required'] ? 'Email requis' : 'Email invalide' }}
-        </span>
-      </div>
-
-      <div class="form-group">
-        <label for="login-password">Mot de passe</label>
-        <div class="input-wrapper">
-          <i class="bi bi-lock"></i>
-          <input 
-            type="password" 
-            id="login-password" 
-            formControlName="password"
-            placeholder="••••••••"
-            [class.error]="loginControls['password'].invalid && loginControls['password'].touched"
-            required>
-        </div>
-        <span *ngIf="loginControls['password'].invalid && loginControls['password'].touched" class="error-message">
-          {{ loginControls['password'].errors?.['required'] ? 'Mot de passe requis' : 'Minimum 6 caractères' }}
-        </span>
-      </div>
-
-      <button type="submit" class="auth-btn" [disabled]="loading || loginForm.invalid">
-        <span *ngIf="!loading">
-          <i class="bi bi-box-arrow-in-right"></i>
-          Se connecter
-        </span>
-        <span *ngIf="loading" class="loading-spinner">
-          <i class="bi bi-arrow-repeat"></i>
-          Connexion...
-        </span>
-      </button>
-    </form>
-
-    <!-- Formulaire d'inscription -->
-    <form *ngIf="!isSignIn" class="auth-form" [formGroup]="registerForm" (ngSubmit)="onRegister()">
-      <div class="form-row">
-        <div class="form-group">
-          <label for="register-nom">Nom</label>
-          <div class="input-wrapper">
-            <i class="bi bi-person"></i>
-            <input 
-              type="text" 
-              id="register-nom" 
-              formControlName="nom"
-              placeholder="Dupont"
-              [class.error]="registerControls['nom'].invalid && registerControls['nom'].touched"
-              required>
+  <div class="auth-container fade-in">
+    <div class="auth-card glass-card">
+      <!-- Header -->
+      <div class="auth-header">
+        <div class="logo-wrap">
+          <div class="logo-icon">
+            <i class="bi bi-briefcase"></i>
           </div>
-          <span *ngIf="registerControls['nom'].invalid && registerControls['nom'].touched" class="error-message">
-            Nom requis (min 2 caractères)
-          </span>
+          <span class="logo-text">SIT ERP</span>
         </div>
+        <h1 class="auth-title">{{ isSignIn ? 'Accès Manager' : 'Créer un compte' }}</h1>
+        <p class="auth-subtitle">Gestion stratégique & pilotage d'entreprise</p>
+      </div>
 
-        <div class="form-group">
-          <label for="register-prenom">Prénom</label>
-          <div class="input-wrapper">
-            <i class="bi bi-person"></i>
-            <input 
-              type="text" 
-              id="register-prenom" 
-              formControlName="prenom"
-              placeholder="Jean"
-              [class.error]="registerControls['prenom'].invalid && registerControls['prenom'].touched"
-              required>
+      <!-- Alerts -->
+      <div *ngIf="errorMessage" class="auth-alert error">
+        <i class="bi bi-exclamation-circle"></i>
+        <span>{{ errorMessage }}</span>
+      </div>
+      <div *ngIf="successMessage" class="auth-alert success">
+        <i class="bi bi-check-circle"></i>
+        <span>{{ successMessage }}</span>
+      </div>
+
+      <!-- Login Form -->
+      <form *ngIf="isSignIn" class="auth-form" [formGroup]="loginForm" (ngSubmit)="onLogin()">
+        <div class="input-group">
+          <label>Email professionnel</label>
+          <div class="input-field" [class.error]="loginControls['email'].invalid && loginControls['email'].touched">
+            <i class="bi bi-envelope"></i>
+            <input type="email" formControlName="email" placeholder="nom@entreprise.com">
           </div>
-          <span *ngIf="registerControls['prenom'].invalid && registerControls['prenom'].touched" class="error-message">
-            Prénom requis (min 2 caractères)
-          </span>
         </div>
-      </div>
 
-      <div class="form-group">
-        <label for="register-email">Email professionnel</label>
-        <div class="input-wrapper">
-          <i class="bi bi-envelope"></i>
-          <input 
-            type="email" 
-            id="register-email" 
-            formControlName="email"
-            placeholder="manager@entreprise.com"
-            [class.error]="registerControls['email'].invalid && registerControls['email'].touched"
-            required>
+        <div class="input-group">
+          <label>Mot de passe</label>
+          <div class="input-field" [class.error]="loginControls['password'].invalid && loginControls['password'].touched">
+            <i class="bi bi-shield-lock"></i>
+            <input type="password" formControlName="password" placeholder="••••••••">
+          </div>
         </div>
-        <span *ngIf="registerControls['email'].invalid && registerControls['email'].touched" class="error-message">
-          {{ registerControls['email'].errors?.['required'] ? 'Email requis' : 'Email invalide' }}
-        </span>
-      </div>
 
-      <div class="form-group">
-        <label for="register-telephone">Téléphone (optionnel)</label>
-        <div class="input-wrapper">
-          <i class="bi bi-telephone"></i>
-          <input 
-            type="tel" 
-            id="register-telephone" 
-            formControlName="telephone"
-            placeholder="+33 6 12 34 56 78">
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label for="register-password">Mot de passe</label>
-        <div class="input-wrapper">
-          <i class="bi bi-lock"></i>
-          <input 
-            type="password" 
-            id="register-password" 
-            formControlName="password"
-            placeholder="••••••••"
-            [class.error]="registerControls['password'].invalid && registerControls['password'].touched"
-            required>
-        </div>
-        <span *ngIf="registerControls['password'].invalid && registerControls['password'].touched" class="error-message">
-          Minimum 6 caractères
-        </span>
-      </div>
-
-      <div class="form-group">
-        <label for="register-confirm">Confirmer le mot de passe</label>
-        <div class="input-wrapper">
-          <i class="bi bi-lock-fill"></i>
-          <input 
-            type="password" 
-            id="register-confirm" 
-            formControlName="confirmPassword"
-            placeholder="••••••••"
-            [class.error]="registerControls['confirmPassword'].invalid && registerControls['confirmPassword'].touched"
-            required>
-        </div>
-        <span *ngIf="registerControls['confirmPassword'].invalid && registerControls['confirmPassword'].touched" class="error-message">
-          {{ registerControls['confirmPassword'].errors?.['required'] ? 'Confirmation requise' : 'Les mots de passe ne correspondent pas' }}
-        </span>
-      </div>
-
-      <button type="submit" class="auth-btn" [disabled]="loading || registerForm.invalid">
-        <span *ngIf="!loading">
-          <i class="bi bi-person-plus"></i>
-          Créer le compte
-        </span>
-        <span *ngIf="loading" class="loading-spinner">
-          <i class="bi bi-arrow-repeat"></i>
-          Création...
-        </span>
-      </button>
-    </form>
-
-    <!-- Toggle -->
-    <div class="auth-toggle">
-      <p>
-        {{ isSignIn ? "Pas encore de compte ?" : "Déjà un compte ?" }}
-        <button type="button" class="toggle-btn" (click)="toggleMode()">
-          {{ isSignIn ? "Créer un compte" : "Se connecter" }}
+        <button type="submit" class="btn-premium btn-primary w-full" [disabled]="loading || loginForm.invalid">
+          <span *ngIf="!loading">Se connecter</span>
+          <span *ngIf="loading" class="spinner"></span>
+          <i *ngIf="!loading" class="bi bi-arrow-right"></i>
         </button>
-      </p>
+      </form>
+
+      <!-- Register Form -->
+      <form *ngIf="!isSignIn" class="auth-form" [formGroup]="registerForm" (ngSubmit)="onRegister()">
+        <div class="form-grid">
+          <div class="input-group">
+            <label>Nom</label>
+            <div class="input-field" [class.error]="registerControls['nom'].invalid && registerControls['nom'].touched">
+              <input type="text" formControlName="nom" placeholder="Nom">
+            </div>
+          </div>
+          <div class="input-group">
+            <label>Prénom</label>
+            <div class="input-field" [class.error]="registerControls['prenom'].invalid && registerControls['prenom'].touched">
+              <input type="text" formControlName="prenom" placeholder="Prénom">
+            </div>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label>Email professionnel</label>
+          <div class="input-field" [class.error]="registerControls['email'].invalid && registerControls['email'].touched">
+            <input type="email" formControlName="email" placeholder="manager@sit.ma">
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label>Mot de passe</label>
+          <div class="input-field" [class.error]="registerControls['password'].invalid && registerControls['password'].touched">
+            <input type="password" formControlName="password" placeholder="••••••••">
+          </div>
+        </div>
+
+        <button type="submit" class="btn-premium btn-primary w-full" [disabled]="loading || registerForm.invalid">
+          <span *ngIf="!loading">Créer mon espace</span>
+          <span *ngIf="loading" class="spinner"></span>
+        </button>
+      </form>
+
+      <div class="auth-footer">
+        {{ isSignIn ? "Pas encore de compte ?" : "Déjà membre ?" }}
+        <button (click)="toggleMode()">{{ isSignIn ? 'S\'inscrire' : 'Se connecter' }}</button>
+      </div>
+    </div>
+
+    <div class="back-link">
+      <a href="/"><i class="bi bi-arrow-left"></i> Retour à l'accueil</a>
     </div>
   </div>
 </div>

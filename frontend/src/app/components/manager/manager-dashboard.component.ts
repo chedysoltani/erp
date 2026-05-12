@@ -1,6 +1,8 @@
 import { Component, HostListener, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { ManagerAuthService, Manager, Project, Meeting } from '../../services/manager-auth.service';
+import { DocumentsService } from '../../services/documents.service';
+import { Document } from '../../models/document.model';
 
 export type SectionId =
   | 'dashboard' | 'projets' | 'taches' | 'gantt'
@@ -86,6 +88,7 @@ export class ManagerDashboardComponent implements OnInit {
     selectedEmployees: [],
     notes: ''
   };
+
   newMeeting: any = {
     title: '',
     date: '',
@@ -97,6 +100,17 @@ export class ManagerDashboardComponent implements OnInit {
     selectedEmployees: [],
     notes: ''
   };
+
+  // Propriétés pour les documents
+  showAddDocumentModal = false;
+  selectedFile: File | null = null;
+  newDocData = {
+    title: '',
+    description: '',
+    employeeId: null as number | null
+  };
+  searchTerm: string = '';
+
 
   // Propriétés pour la navigation du calendrier
   currentCalendarDate = new Date();
@@ -134,6 +148,9 @@ export class ManagerDashboardComponent implements OnInit {
     
     // Charger les réunions depuis la base de données
     this.loadMeetingsFromDatabase();
+    
+    // Charger les documents
+    this.loadDocuments();
     
     // Les données seront chargées depuis la base de données via les méthodes appelées ci-dessus
   }
@@ -212,8 +229,6 @@ export class ManagerDashboardComponent implements OnInit {
   }
 
   loadUsersFromDatabase() {
-    console.log('Début du chargement des utilisateurs depuis la base...');
-    
     if (!this.currentManager) {
       console.error('Aucun manager connecté pour charger les utilisateurs');
       return;
@@ -222,7 +237,6 @@ export class ManagerDashboardComponent implements OnInit {
     this.managerAuthService.getAllUsers().subscribe({
       next: (response: any) => {
         const users = response.data || response;
-        console.log('Utilisateurs chargés depuis la base:', users);
         
         // Transformer les utilisateurs pour l'affichage
         this.allUsers = users.map((user: any) => ({
@@ -258,6 +272,10 @@ export class ManagerDashboardComponent implements OnInit {
         console.log('Fallback: utilisation des données locales');
       }
     });
+  }
+
+  getOnlyEmployees() {
+    return this.allUsers.filter(user => user.role === 'employee');
   }
 
   loadMeetingsFromDatabase() {
@@ -330,20 +348,40 @@ export class ManagerDashboardComponent implements OnInit {
         }
         
         // Transformer les tâches pour l'affichage
-        const transformedTasks = tasks.map((task: any) => ({
-          id: task.id,
-          title: task.title,
-          description: task.description,
-          priority: task.priority,
-          status: task.status,
-          assignee: 'Non assigné',
-          assigneeInitials: 'NA',
-          avatarColor: this.getAvatarColor(task.id),
-          dueDate: task.due_date || new Date().toISOString().split('T')[0],
-          progress: task.progress || 0,
-          tags: task.tags ? JSON.parse(task.tags) : [],
-          submittedAt: task.created_at || new Date().toISOString()
-        }));
+        const transformedTasks = tasks.map((task: any) => {
+          let assigneeName = 'Non assigné';
+          if (task.assignee_id) {
+            const user = this.allUsers.find(u => u.id === task.assignee_id);
+            if (user) {
+              assigneeName = `${user.prenom} ${user.nom}`;
+            }
+          }
+          
+          let parsedTags = [];
+          try {
+            if (task.tags) {
+              parsedTags = typeof task.tags === 'string' ? JSON.parse(task.tags) : task.tags;
+            }
+          } catch (e) {
+            console.error('Erreur parsing tags:', e);
+          }
+
+          return {
+            id: task.id,
+            title: task.title,
+            description: task.description,
+            priority: task.priority,
+            status: task.status,
+            assignee: assigneeName,
+            assignee_id: task.assignee_id,
+            assigneeInitials: assigneeName !== 'Non assigné' ? assigneeName.split(' ').map(n => n[0]).join('') : 'NA',
+            avatarColor: this.getAvatarColor(task.id),
+            dueDate: task.due_date || new Date().toISOString().split('T')[0],
+            progress: task.progress || 0,
+            tags: parsedTags,
+            submittedAt: task.created_at || new Date().toISOString()
+          };
+        });
         
         // Mettre à jour le tableau de tâches principal
         if (!this.tasks) {
@@ -433,10 +471,11 @@ export class ManagerDashboardComponent implements OnInit {
   upcomingMeetings: any[] = [];
 
   // Les documents seront chargés depuis la base de données
-  documents: any[] = [];
+  documents: Document[] = [];
 
   constructor(
     private managerAuthService: ManagerAuthService,
+    public documentsService: DocumentsService,
     private router: Router
   ) {}
 
@@ -824,21 +863,122 @@ export class ManagerDashboardComponent implements OnInit {
 
   deleteTask(taskId: number) {
     if (confirm('Êtes-vous sûr de vouloir supprimer cette tâche ?')) {
-      console.log('Suppression de la tâche:', taskId);
-      
       this.managerAuthService.deleteTask(taskId).subscribe({
-        next: (response: any) => {
-          console.log('Tâche supprimée:', response);
-          alert('Tâche supprimée avec succès');
-          // Recharger les tâches
+        next: () => {
           this.loadTasksFromDatabase();
         },
-        error: (error: any) => {
+        error: (error) => {
           console.error('Erreur lors de la suppression de la tâche:', error);
           alert('Erreur lors de la suppression de la tâche');
         }
       });
     }
+  }
+
+  // --- GESTION DES DOCUMENTS ---
+  loadDocuments() {
+    this.loading = true;
+    this.documentsService.getAllDocuments().subscribe({
+      next: (response) => {
+        if (response.success) {
+          this.documents = response.data;
+        }
+        this.loading = false;
+      },
+      error: (error) => {
+        console.error('Erreur lors du chargement des documents:', error);
+        this.loading = false;
+      }
+    });
+  }
+
+  openAddDocumentModal() {
+    this.showAddDocumentModal = true;
+    this.newDocData = { title: '', description: '', employeeId: null };
+    this.selectedFile = null;
+    
+    // S'assurer que les employés sont chargés
+    if (this.allUsers.length === 0) {
+      this.loadUsersFromDatabase();
+      
+      // Vérifier après un court délai si les employés sont disponibles
+      setTimeout(() => {
+        if (this.allUsers.length === 0) {
+          alert('Erreur: Impossible de charger la liste des employés. Veuillez réessayer.');
+          this.closeAddDocumentModal();
+        }
+      }, 2000);
+    }
+  }
+
+  closeAddDocumentModal() {
+    this.showAddDocumentModal = false;
+  }
+
+  onFileSelected(event: any) {
+    this.selectedFile = event.target.files[0];
+  }
+
+  submitDocument() {
+    if (!this.newDocData.title || !this.selectedFile || !this.newDocData.employeeId) {
+      alert('Veuillez remplir tous les champs obligatoires.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', this.selectedFile);
+    formData.append('title', this.newDocData.title);
+    formData.append('description', this.newDocData.description);
+    formData.append('employeeId', this.newDocData.employeeId.toString());
+
+    this.loading = true;
+    this.documentsService.uploadDocument(formData).subscribe({
+      next: (response) => {
+        if (response.success) {
+          alert('Document ajouté avec succès.');
+          this.closeAddDocumentModal();
+          this.loadDocuments();
+        }
+        this.loading = false;
+      },
+      error: (error) => {
+        console.error('Erreur lors de l\'ajout du document:', error);
+        alert(error.error?.message || 'Erreur lors de l\'ajout du document.');
+        this.loading = false;
+      }
+    });
+  }
+
+  deleteDocument(id: number) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer ce document ?')) {
+      this.documentsService.deleteDocument(id).subscribe({
+        next: (response) => {
+          if (response.success) {
+            this.loadDocuments();
+          }
+        },
+        error: (error) => {
+          console.error('Erreur lors de la suppression du document:', error);
+        }
+      });
+    }
+  }
+
+  getFilteredDocuments() {
+    if (!this.searchTerm) return this.documents;
+    const term = this.searchTerm.toLowerCase();
+    return this.documents.filter(doc => 
+      doc.title.toLowerCase().includes(term) || 
+      doc.employee_name?.toLowerCase().includes(term) ||
+      doc.file_name.toLowerCase().includes(term)
+    );
+  }
+
+  getFileIcon(type: string): string {
+    if (type.includes('pdf')) return 'bi-file-earmark-pdf text-danger';
+    if (type.includes('word') || type.includes('doc')) return 'bi-file-earmark-word text-primary';
+    if (type.includes('image')) return 'bi-file-earmark-image text-success';
+    return 'bi-file-earmark-text';
   }
 
   // Formulaire de création de tâche

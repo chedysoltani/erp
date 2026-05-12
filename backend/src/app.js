@@ -33,6 +33,8 @@ const meetingRoutes = require('./routes/meetings');
 const employeeRoutes = require('./routes/employee');
 const employeeSkillsRoutes = require('./routes/employeeSkills');
 const managerRoutes = require('./routes/manager');
+const documentRoutes = require('./routes/documents');
+
 app.use('/api/users', userRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/tasks', taskRoutes);
@@ -41,6 +43,12 @@ app.use('/api/meetings', meetingRoutes);
 app.use('/api/employee', employeeRoutes);
 app.use('/api/employee', employeeSkillsRoutes);
 app.use('/api/manager', managerRoutes);
+app.use('/api/documents', documentRoutes);
+
+// Serve uploads as static
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 
 // Error handling middleware
 app.use((err, req, res, next) => {

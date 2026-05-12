@@ -101,11 +101,28 @@ export class LandingComponent implements OnInit {
     { number: '24',  label: 'Accès continu',        suffix: '/7' }
   ];
 
-  ngOnInit(): void {}
+  ngOnInit(): void {
+    this.initScrollReveal();
+  }
 
   @HostListener('window:scroll', [])
   onWindowScroll(): void {
     this.isScrolled = window.scrollY > 60;
+  }
+
+  private initScrollReveal(): void {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('active');
+        }
+      });
+    }, { threshold: 0.1 });
+
+    setTimeout(() => {
+      const elements = document.querySelectorAll('.reveal');
+      elements.forEach(el => observer.observe(el));
+    }, 100);
   }
 
   scrollToSection(sectionId: string): void {

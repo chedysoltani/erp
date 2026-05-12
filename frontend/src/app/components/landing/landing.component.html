@@ -1,106 +1,87 @@
-<!-- Bootstrap Icons CDN requis dans index.html :
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
--->
-
-<!-- Navigation -->
 <nav class="navbar" [class.scrolled]="isScrolled">
-  <div class="nav-container">
-
-    <a class="nav-brand" href="#home">
-      <span class="brand-hex">⬡</span>
-      <span class="brand-name">SIT</span>
-      <!--<span class="brand-version">{{ company.version }}</span>-->
+  <div class="nav-container glass-card">
+    <a class="nav-brand" (click)="scrollToSection('home')">
+      <div class="logo-orb"></div>
+      <span class="brand-name">SIT ERP</span>
     </a>
 
     <ul class="nav-links">
       <li><a (click)="scrollToSection('features')">Fonctionnalités</a></li>
       <li><a (click)="scrollToSection('modules')">Modules</a></li>
-      <li><a (click)="scrollToSection('stats')">Chiffres</a></li>
-      <li><a (click)="scrollToSection('contact')">Contact</a></li>
+      <li><a (click)="scrollToSection('stats')">Performance</a></li>
     </ul>
 
-    <a class="btn-nav-cta" href="/users">
-      Accès ERP &nbsp;→
-    </a>
-
+    <div class="nav-actions">
+      <a class="btn-premium btn-secondary" href="/employee-login">
+        Accès Employé
+      </a>
+      <a class="btn-premium btn-primary" href="/manager">
+        Portail Manager
+      </a>
+    </div>
   </div>
 </nav>
 
 <!-- ===== HERO ===== -->
 <section id="home" class="hero">
-  <div class="hero-bg-grid"></div>
-  <div class="hero-orb hero-orb-1"></div>
-  <div class="hero-orb hero-orb-2"></div>
-  <div class="hero-orb hero-orb-3"></div>
-
-  <div class="hero-container">
-
-    <div class="hero-badge">
-      <span class="badge-dot"></span>
-      Plateforme ERP interne — SIT
+  <div class="hero-glow hero-glow-1"></div>
+  <div class="hero-glow hero-glow-2"></div>
+  
+  <div class="hero-container fade-in">
+    <div class="hero-badge reveal">
+      <span class="badge-pulse"></span>
+      Innovation Opérationnelle
     </div>
 
-    <h1 class="hero-title">
-      Pilotez votre<br>
-      <span class="gradient-text">entreprise.</span><br>
-      En un seul endroit.
+    <h1 class="hero-title reveal">
+      L'ERP nouvelle<br>
+      <span class="gradient-text">génération.</span>
     </h1>
 
-    <p class="hero-subtitle">{{ company.description }}</p>
+    <p class="hero-subtitle reveal">
+      {{ company.description }}
+    </p>
 
-    <div class="hero-actions">
-      <button class="btn-primary-hero" (click)="scrollToSection('modules')">
-        Explorer les modules
-        <span class="btn-icon">↓</span>
+    <div class="hero-actions reveal">
+      <button class="btn-premium btn-primary" (click)="scrollToSection('modules')">
+        Explorer la suite
+        <i class="bi bi-arrow-down"></i>
       </button>
-      <a class="btn-secondary-hero" href="/users">
-        Accès Employé &nbsp;→
-      </a>
-      <a class="btn-manager-hero" href="/manager-login">
-        <i class="bi bi-briefcase-fill"></i>
-        Accès Manager &nbsp;→
+      <a class="btn-premium btn-secondary" href="/employee-login">
+        Espace Employé
+        <i class="bi bi-arrow-right"></i>
       </a>
     </div>
 
-    <!-- Floating module pills -->
-    <div class="hero-pills">
-      <span class="pill pill-1"><i class="bi bi-kanban-fill"></i> Projets</span>
-      <span class="pill pill-2"><i class="bi bi-clock-history"></i> Timesheet</span>
-      <span class="pill pill-3"><i class="bi bi-calendar3-range"></i> Gantt</span>
-      <span class="pill pill-4"><i class="bi bi-speedometer2"></i> Dashboard</span>
-      <span class="pill pill-5"><i class="bi bi-folder2-open"></i> Documents</span>
+    <!-- Floating UI elements -->
+    <div class="floating-cards">
+      <div class="float-card glass-card float" style="--delay: 0s">
+        <i class="bi bi-kanban"></i>
+        <span>Gestion Kanban</span>
+      </div>
+      <div class="float-card glass-card float" style="--delay: 1.5s">
+        <i class="bi bi-graph-up-arrow"></i>
+        <span>Analytics AI</span>
+      </div>
     </div>
-
-  </div>
-
-  <div class="scroll-indicator">
-    <span>Découvrir</span>
-    <div class="scroll-line"></div>
   </div>
 </section>
 
 <!-- ===== FEATURES ===== -->
 <section id="features" class="features-section">
   <div class="section-container">
-    <div class="section-header">
-      <!--<p class="section-label">Pourquoi SIT ?</p>-->
-      <h2 class="section-title">Conçu pour<br>l'efficacité opérationnelle.</h2>
+    <div class="section-header reveal">
+      <h2 class="section-title">Pourquoi choisir <span class="gradient-text">SIT ERP</span> ?</h2>
+      <p class="section-subtitle">Une architecture robuste pour des performances inégalées.</p>
     </div>
 
     <div class="features-grid">
-      <div
-        class="feature-card"
-        *ngFor="let feature of features; let i = index"
-        [style.--delay]="(i * 0.1) + 's'">
-
-        <div class="feature-icon-wrap" [ngStyle]="{
-          background: feature.accent + '18',
-          border: '1px solid ' + feature.accent + '30',
-          color: feature.accent
-        }">
+      <div class="feature-card glass-card reveal" 
+           *ngFor="let feature of features; let i = index"
+           [style.transition-delay]="(i * 0.1) + 's'">
+        <div class="feature-icon" [style.background]="feature.accent">
           <i class="bi {{ feature.icon }}"></i>
         </div>
-
         <h3 class="feature-title">{{ feature.title }}</h3>
         <p class="feature-desc">{{ feature.description }}</p>
       </div>
@@ -111,34 +92,24 @@
 <!-- ===== MODULES ===== -->
 <section id="modules" class="modules-section">
   <div class="section-container">
-    <div class="section-header">
-      <p class="section-label">8 modules intégrés</p>
-      <h2 class="section-title">Une solution complète<br>pour votre équipe.</h2>
+    <div class="section-header reveal">
+      <h2 class="section-title">Modules <span class="gradient-text">Intégrés</span></h2>
+      <p class="section-subtitle">Huit outils puissants travaillant en parfaite synergie.</p>
     </div>
 
     <div class="modules-grid">
-      <div
-        class="module-card"
-        *ngFor="let module of modules; let i = index"
-        [style.--delay]="(i * 0.07) + 's'">
-
-        <div class="module-top">
-          <div class="module-icon">
-            <i class="bi {{ module.icon }}"></i>
-          </div>
-          <span class="module-tag"
-            [ngStyle]="{
-              background: getTagColor(module.tag) + '22',
-              color: getTagColor(module.tag)
-            }">
-            {{ module.tag }}
-          </span>
+      <div class="module-card glass-card reveal" 
+           *ngFor="let module of modules; let i = index"
+           [style.transition-delay]="(i * 0.05) + 's'">
+        <div class="module-header">
+          <i class="bi {{ module.icon }}"></i>
+          <span class="module-tag">{{ module.tag }}</span>
         </div>
-
         <h3 class="module-name">{{ module.name }}</h3>
         <p class="module-desc">{{ module.description }}</p>
-        <div class="module-arrow">→</div>
-
+        <div class="module-hover-icon">
+          <i class="bi bi-arrow-up-right"></i>
+        </div>
       </div>
     </div>
   </div>
@@ -146,68 +117,38 @@
 
 <!-- ===== STATS ===== -->
 <section id="stats" class="stats-section">
-  <div class="stats-inner">
+  <div class="stats-container reveal">
     <div class="stat-item" *ngFor="let stat of stats">
-      <div class="stat-number">{{ stat.number }}<span class="stat-suffix">{{ stat.suffix }}</span></div>
+      <div class="stat-value">
+        <span class="stat-number">{{ stat.number }}</span>
+        <span class="stat-suffix">{{ stat.suffix }}</span>
+      </div>
       <div class="stat-label">{{ stat.label }}</div>
-    </div>
-  </div>
-</section>
-
-<!-- ===== CONTACT ===== -->
-<section id="contact" class="contact-section">
-  <div class="section-container">
-    <div class="contact-card">
-
-      <div class="contact-left">
-        <p class="section-label">Contactez-nous</p>
-        <h2 class="contact-title">Prêt à centraliser<br>votre activité ?</h2>
-        <p class="contact-sub">Notre équipe est disponible pour vous accompagner dans la prise en main de la plateforme SIT ERP.</p>
-        <a class="btn-primary-hero" href="/users">
-          Accéder à SIT ERP &nbsp;→
-        </a>
-      </div>
-
-      <div class="contact-right">
-        <div class="contact-item">
-          <div class="contact-icon"><i class="bi bi-telephone-fill"></i></div>
-          <div>
-            <span class="contact-label">Téléphone</span>
-            <span class="contact-value">+212 5XX XXX XXX</span>
-          </div>
-        </div>
-        <div class="contact-item">
-          <div class="contact-icon"><i class="bi bi-envelope-fill"></i></div>
-          <div>
-            <span class="contact-label">Email</span>
-            <span class="contact-value">contact&#64;sit.ma</span>
-          </div>
-        </div>
-        <div class="contact-item">
-          <div class="contact-icon"><i class="bi bi-geo-alt-fill"></i></div>
-          <div>
-            <span class="contact-label">Adresse</span>
-            <span class="contact-value">Maroc</span>
-          </div>
-        </div>
-      </div>
-
     </div>
   </div>
 </section>
 
 <!-- ===== FOOTER ===== -->
 <footer class="footer">
-  <div class="footer-inner">
-    <a class="footer-brand" href="#home">
-      <span class="brand-hex">⬡</span>
-      <span class="brand-name">SIT</span>
-    </a>
-    <p class="footer-copy">© 2024 SIT. Tous droits réservés. — Plateforme ERP interne.</p>
-    <div class="footer-links">
-      <a (click)="scrollToSection('home')">Accueil</a>
-      <a (click)="scrollToSection('modules')">Modules</a>
-      <a href="/users">Accès ERP</a>
+  <div class="footer-container">
+    <div class="footer-main">
+      <div class="footer-brand">
+        <span class="brand-name">SIT ERP</span>
+        <p>L'excellence opérationnelle au service de votre ambition.</p>
+      </div>
+      <div class="footer-nav">
+        <a (click)="scrollToSection('features')">Features</a>
+        <a (click)="scrollToSection('modules')">Modules</a>
+        <a href="/manager">Manager</a>
+        <a href="/employee-login">Employé</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>© 2024 SIT ERP — Tous droits réservés.</p>
+      <div class="footer-socials">
+        <i class="bi bi-linkedin"></i>
+        <i class="bi bi-twitter-x"></i>
+      </div>
     </div>
   </div>
 </footer>

@@ -2,6 +2,8 @@ import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { ManagerAuthService, Employee } from '../../services/manager-auth.service';
 import { EmployeeService } from '../../services/employee.service';
+import { DocumentsService } from '../../services/documents.service';
+import { Document } from '../../models/document.model';
 
 export type SectionId = 'dashboard' | 'taches' | 'timesheet' | 'reunions' | 'documents' | 'competences';
 
@@ -46,6 +48,8 @@ interface DisplayTimesheet {
 export class EmployeeDashboardComponent implements OnInit {
   activeSection: SectionId = 'dashboard';
   currentEmployee: Employee | null = null;
+  loading = false;
+  documents: Document[] = [];
   
   // Dashboard stats
   employeeStats = {
@@ -178,7 +182,8 @@ export class EmployeeDashboardComponent implements OnInit {
   constructor(
     private router: Router,
     private managerAuthService: ManagerAuthService,
-    private employeeService: EmployeeService
+    private employeeService: EmployeeService,
+    private documentsService: DocumentsService
   ) {}
 
   ngOnInit() {
@@ -204,7 +209,9 @@ export class EmployeeDashboardComponent implements OnInit {
     
     // Charger les données réelles depuis le backend
     this.loadRealEmployeeData();
+    this.loadDocuments();
   }
+
 
   loadRealEmployeeData() {
     const employeeId = this.currentEmployee?.id;
@@ -623,5 +630,36 @@ export class EmployeeDashboardComponent implements OnInit {
 
   stopPropagation(event: Event) {
     event.stopPropagation();
+  }
+
+  loadDocuments() {
+    this.loading = true;
+    if (!this.currentEmployee) {
+      this.loading = false;
+      return;
+    }
+    this.documentsService.getMyDocuments(this.currentEmployee.id).subscribe({
+      next: (response) => {
+        if (response.success) {
+          this.documents = response.data;
+        }
+        this.loading = false;
+      },
+      error: (error) => {
+        console.error('Erreur lors du chargement des documents:', error);
+        this.loading = false;
+      }
+    });
+  }
+
+  downloadDocument(doc: Document) {
+    this.documentsService.downloadDocument(doc.file_path);
+  }
+
+  getFileIcon(type: string): string {
+    if (type.includes('pdf')) return 'bi-file-earmark-pdf text-danger';
+    if (type.includes('word') || type.includes('doc')) return 'bi-file-earmark-word text-primary';
+    if (type.includes('image')) return 'bi-file-earmark-image text-success';
+    return 'bi-file-earmark-text';
   }
 }

@@ -1,14 +1,14 @@
-<!-- index.html must include:
+﻿<!-- index.html must include:
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 -->
 
 <div class="erp-shell">
 
-  <!-- ═══════════════ SIDEBAR ═══════════════ -->
+  <!-- ━━━━━━━━━━━━━━━ SIDEBAR ━━━━━━━━━━━━━━━ -->
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <div class="logo-hex">⬡</div>
+      <div class="logo-hex">↕</div>
       <span class="logo-name">SIT</span>
       <span class="logo-badge">v2.0</span>
     </div>
@@ -58,7 +58,7 @@
     </div>
   </aside>
 
-  <!-- ═══════════════ MAIN ═══════════════ -->
+  <!-- ━━━━━━━━━━━━━━━ MAIN ━━━━━━━━━━━━━━━ -->
   <div class="main-area">
 
     <!-- TOPBAR -->
@@ -78,7 +78,7 @@
     <!-- SECTIONS -->
     <div class="content-area">
 
-      <!-- ══ DASHBOARD ══ -->
+      <!-- ━━ DASHBOARD ━━ -->
       <div *ngIf="activeSection === 'dashboard'" class="section fade-in">
         <!-- Stats Grid -->
         <section class="stats-section">
@@ -279,7 +279,7 @@
         </section>
       </div>
 
-      <!-- ══ PROJETS ══ -->
+      <!-- ━━ PROJETS ━━ -->
       <div *ngIf="activeSection === 'projets'" class="section fade-in">
         <div class="projects-header">
           <div class="header-actions">
@@ -356,7 +356,7 @@
         </div>
       </div>
 
-      <!-- ══ TÂCHES ══ -->
+      <!-- ━━ TÃƒâ€šCHES ━━ -->
       <div *ngIf="activeSection === 'taches'" class="section fade-in">
         <div class="kanban-header">
           <div class="header-actions">
@@ -500,7 +500,7 @@
         </div>
       </div>
 
-      <!-- ══ GANTT ══ -->
+      <!-- ━━ GANTT ━━ -->
       <div *ngIf="activeSection === 'gantt'" class="section fade-in">
         <div class="gantt-link-container">
           <div class="gantt-preview">
@@ -561,7 +561,7 @@
         </div>
       </div>
 
-      <!-- ══ UTILISATEURS ══ -->
+      <!-- ━━ UTILISATEURS ━━ -->
       <div *ngIf="activeSection === 'utilisateurs'" class="section fade-in">
         <div class="users-header">
           <div class="header-actions">
@@ -679,7 +679,7 @@
         </div>
       </div>
 
-      <!-- ══ RÉUNIONS ══ -->
+      <!-- ━━ RÉUNIONS ━━ -->
       <div *ngIf="activeSection === 'reunions'" class="section fade-in">
         <div class="meetings-header">
           <div class="header-actions">
@@ -786,65 +786,77 @@
         </div>
       </div>
 
-      <!-- ══ RECOMMANDATIONS IA ══ -->
+      <!-- ━━ RECOMMANDATIONS IA ━━ -->
       <div *ngIf="activeSection === 'recommandations'" class="section fade-in">
         <app-task-recommendation></app-task-recommendation>
       </div>
 
-      <!-- ══ SIMULATEUR PROJETS ══ -->
+      <!-- ━━ SIMULATEUR PROJETS ━━ -->
       <div *ngIf="activeSection === 'simulateur'" class="section fade-in">
         <app-project-simulator></app-project-simulator>
       </div>
 
-      <!-- ══ DOCUMENTS ══ -->
+      <!-- ━━ DOCUMENTS ━━ -->
       <div *ngIf="activeSection === 'documents'" class="section fade-in">
         <div class="documents-header">
           <div class="header-actions">
-            <button class="btn-primary">
+            <button class="btn-primary" (click)="openAddDocumentModal()">
               <i class="bi bi-cloud-upload"></i>
-              Téléverser
+              Ajouter un document
             </button>
             <div class="filter-controls">
-              <input type="text" class="search-input" placeholder="Rechercher un document...">
-              <select class="filter-select">
-                <option>Tous les types</option>
-                <option>PDF</option>
-                <option>Word</option>
-                <option>Excel</option>
-                <option>Images</option>
-              </select>
+              <input type="text" class="search-input" placeholder="Rechercher par titre ou employé..." [(ngModel)]="searchTerm">
             </div>
           </div>
         </div>
 
-        <div class="documents-grid">
-          <div class="document-card" *ngFor="let doc of documents">
-            <div class="document-icon" [ngClass]="'doc-' + doc.type">
-              <i class="bi" [ngClass]="getDocumentIcon(doc.type)"></i>
-            </div>
-            <div class="document-info">
-              <h4 class="document-title">{{ doc.title }}</h4>
-              <p class="document-meta">
-                <span>{{ doc.size }}</span>
-                <span>•</span>
-                <span>{{ doc.modified | date:'dd MMM yyyy' }}</span>
-              </p>
-              <div class="document-tags">
-                <span *ngFor="let tag of doc.tags" class="doc-tag">{{ tag }}</span>
-              </div>
-            </div>
-            <div class="document-actions">
-              <button class="btn-icon" title="Télécharger">
-                <i class="bi bi-download"></i>
-              </button>
-              <button class="btn-icon" title="Partager">
-                <i class="bi bi-share"></i>
-              </button>
-              <button class="btn-icon danger" title="Supprimer">
-                <i class="bi bi-trash"></i>
-              </button>
-            </div>
-          </div>
+        <div class="documents-table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Document</th>
+                <th>Employé</th>
+                <th>Type</th>
+                <th>Taille</th>
+                <th>Date</th>
+                <th class="text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let doc of getFilteredDocuments()">
+                <td>
+                  <div class="doc-title-cell">
+                    <i class="bi" [ngClass]="getFileIcon(doc.file_type)"></i>
+                    <span class="doc-title">{{ doc.title }}</span>
+                  </div>
+                </td>
+                <td>
+                  <span class="employee-badge">{{ doc.employee_name || 'Tous' }}</span>
+                </td>
+                <td><span class="file-type">{{ doc.file_type ? (doc.file_type.split('/')[1] || doc.file_type).toUpperCase() : 'N/A' }}</span></td>
+                <td>{{ doc.file_size }} MB</td>
+                <td>{{ doc.created_at | date:'dd/MM/yyyy' }}</td>
+                <td class="text-right">
+                  <div class="table-actions">
+                    <button class="btn-icon" (click)="documentsService.downloadDocument(doc.file_path)" title="Visualiser">
+                      <i class="bi bi-eye"></i>
+                    </button>
+                    <button class="btn-icon danger" (click)="deleteDocument(doc.id)" title="Supprimer">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              <tr *ngIf="getFilteredDocuments().length === 0">
+                <td colspan="6" class="empty-table">
+                  <div class="empty-state">
+                    <i class="bi bi-folder-x"></i>
+                    <p>Aucun document trouvé</p>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -937,7 +949,7 @@
           </div>
 
           <div class="form-group">
-            <label for="projectBudget">Budget (€)</label>
+            <label for="projectBudget">Budget (ââ€šÂ¬)</label>
             <input 
               type="number" 
               id="projectBudget" 
@@ -1012,11 +1024,11 @@
               <div class="detail-row">
                 <div class="detail-item">
                   <label>Date de début</label>
-                  <p>{{ selectedProject?.startDate | date:'dd MMM yyyy' || 'Non définie' }}</p>
+                  <p>{{ selectedProject?.startDate ? (selectedProject.startDate | date:'dd MMM yyyy') : 'Non définie' }}</p>
                 </div>
                 <div class="detail-item">
                   <label>Date de fin</label>
-                  <p>{{ selectedProject?.endDate | date:'dd MMM yyyy' || 'Non définie' }}</p>
+                  <p>{{ selectedProject?.endDate ? (selectedProject.endDate | date:'dd MMM yyyy') : 'Non définie' }}</p>
                 </div>
               </div>
 
@@ -1029,13 +1041,13 @@
                 </div>
                 <div class="detail-item">
                   <label>Budget</label>
-                  <p>{{ selectedProject?.budget ? selectedProject.budget + ' €' : 'Non défini' }}</p>
+                  <p>{{ selectedProject?.budget ? selectedProject.budget + ' ââ€šÂ¬' : 'Non défini' }}</p>
                 </div>
               </div>
 
               <div class="detail-item">
                 <label>Date limite</label>
-                <p>{{ selectedProject?.deadline | date:'dd MMM yyyy' || 'Non définie' }}</p>
+                <p>{{ selectedProject?.deadline ? (selectedProject.deadline | date:'dd MMM yyyy') : 'Non définie' }}</p>
               </div>
             </div>
 
@@ -1140,7 +1152,7 @@
           </div>
 
           <div class="form-group">
-            <label for="editProjectBudget">Budget (€)</label>
+            <label for="editProjectBudget">Budget (ââ€šÂ¬)</label>
             <input 
               type="number" 
               id="editProjectBudget" 
@@ -1954,3 +1966,95 @@
     </form>
   </div>
 </div>
+<!-- Modal d'ajout de document -->
+<div *ngIf="showAddDocumentModal" class="modal-overlay" (click)="closeAddDocumentModal()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2 class="modal-title">Ajouter un document</h2>
+      <button class="modal-close" (click)="closeAddDocumentModal()">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+    
+    <form class="modal-body" (ngSubmit)="submitDocument()">
+      <div class="form-group">
+        <label for="docTitle">Titre du document *</label>
+        <input 
+          type="text" 
+          id="docTitle" 
+          name="docTitle"
+          [(ngModel)]="newDocData.title" 
+          required
+          placeholder="Ex: Contrat de travail, Guide technique..."
+          class="form-input">
+      </div>
+
+      <div class="form-group">
+        <label for="docDescription">Description</label>
+        <textarea 
+          id="docDescription" 
+          name="docDescription"
+          [(ngModel)]="newDocData.description" 
+          rows="3"
+          placeholder="Brève description du contenu..."
+          class="form-textarea"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="docEmployee">Assigner à l'employé *</label>
+        <select 
+          id="docEmployee" 
+          name="docEmployee"
+          [(ngModel)]="newDocData.employeeId" 
+          required
+          class="form-select">
+          <option [ngValue]="null">Sélectionner un employé</option>
+          <option *ngFor="let user of getOnlyEmployees()" [ngValue]="user.id">
+            {{ user.prenom }} {{ user.nom }}
+          </option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="docFile">Fichier * (PDF, DOC, PNG, JPG - Max 10MB)</label>
+        <div class="file-upload-area">
+          <input 
+            type="file" 
+            id="docFile" 
+            (change)="onFileSelected($event)" 
+            class="file-input"
+            accept=".pdf,.doc,.docx,.png,.jpg,.jpeg">
+          <div class="file-upload-info" *ngIf="selectedFile">
+            <i class="bi bi-file-earmark-check"></i>
+            <span>{{ selectedFile.name }} ({{ (selectedFile.size / 1024).toFixed(1) }} KB)</span>
+          </div>
+          <div class="file-upload-placeholder" *ngIf="!selectedFile">
+            <i class="bi bi-cloud-arrow-up"></i>
+            <span>Cliquez pour choisir un fichier</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="button" class="btn-secondary" (click)="closeAddDocumentModal()">
+          Annuler
+        </button>
+        <button type="submit" class="btn-primary" [disabled]="loading || !newDocData.title || !selectedFile || !newDocData.employeeId">
+          <span *ngIf="!loading">
+            <i class="bi bi-check-circle"></i>
+            Enregistrer
+          </span>
+          <span *ngIf="loading" class="loading-spinner">
+            <i class="bi bi-arrow-repeat"></i>
+            Téléchargement...
+          </span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+
+
+

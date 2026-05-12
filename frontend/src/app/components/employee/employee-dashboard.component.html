@@ -1,4 +1,4 @@
-<div class="employee-dashboard">
+﻿<div class="employee-dashboard">
   <!-- Header -->
   <header class="dashboard-header">
     <div class="header-left">
@@ -71,7 +71,7 @@
 
   <!-- Main Content -->
   <main class="dashboard-content">
-    <!-- ══ DASHBOARD ══ -->
+    <!-- â•â• DASHBOARD â•â• -->
     <div *ngIf="activeSection === 'dashboard'" class="section fade-in">
       <!-- Stats Overview -->
       <section class="stats-section">
@@ -212,7 +212,7 @@
       </section>
     </div>
 
-    <!-- ══ MES TÂCHES ══ -->
+    <!-- â•â• MES TÃ‚CHES â•â• -->
     <div *ngIf="activeSection === 'taches'" class="section fade-in">
       <div class="section-header">
         <h2 class="section-title">Mes Tâches</h2>
@@ -226,7 +226,7 @@
             </select>
             <select class="filter-select">
               <option>Tous les statuts</option>
-              <option>À faire</option>
+              <option>Ã€ faire</option>
               <option>En cours</option>
               <option>Terminé</option>
             </select>
@@ -279,7 +279,7 @@
       </div>
     </div>
 
-    <!-- ══ TIMESHEET ══ -->
+    <!-- â•â• TIMESHEET â•â• -->
     <div *ngIf="activeSection === 'timesheet'" class="section fade-in">
       <div class="section-header">
         <h2 class="section-title">Timesheet</h2>
@@ -330,7 +330,7 @@
       </div>
     </div>
 
-    <!-- ══ RÉUNIONS ══ -->
+    <!-- â•â• RÉUNIONS â•â• -->
     <div *ngIf="activeSection === 'reunions'" class="section fade-in">
       <div class="section-header">
         <h2 class="section-title">Mes Réunions</h2>
@@ -387,70 +387,56 @@
       </div>
     </div>
 
-    <!-- ══ DOCUMENTS ══ -->
+    <!-- â•â• DOCUMENTS â•â• -->
     <div *ngIf="activeSection === 'documents'" class="section fade-in">
       <div class="section-header">
-        <h2 class="section-title">Documents</h2>
+        <h2 class="section-title">Mes Documents</h2>
         <div class="section-actions">
-          <button class="btn-primary">
-            <i class="bi bi-plus-circle"></i>
-            Nouveau Document
+          <button class="btn-refresh" (click)="loadDocuments()" [disabled]="loading">
+            <i class="bi bi-arrow-clockwise" [class.spin]="loading"></i>
+            Actualiser
           </button>
         </div>
       </div>
 
-      <div class="documents-grid">
-        <div class="document-card">
+      <div class="documents-grid" *ngIf="documents.length > 0">
+        <div class="document-card" *ngFor="let doc of documents">
           <div class="document-icon">
-            <i class="bi bi-file-earmark-pdf"></i>
+            <i class="bi" [ngClass]="getFileIcon(doc.file_type)"></i>
           </div>
-          <h3 class="document-title">Rapport Mensuel Mars</h3>
-          <p class="document-info">PDF • 2.3 MB • Il y a 2 jours</p>
+          <h3 class="document-title">{{ doc.title }}</h3>
+          <p class="document-info">
+            {{ doc.file_type.split('/')[1].toUpperCase() }} â€¢ 
+            {{ doc.file_size }} MB â€¢ 
+            {{ doc.created_at | date:'dd MMM yyyy' }}
+          </p>
+          <div class="document-description" *ngIf="doc.description">
+            {{ doc.description }}
+          </div>
           <div class="document-actions">
-            <button class="btn-download">
+            <button class="btn-download" (click)="downloadDocument(doc)" title="Télécharger / Voir">
               <i class="bi bi-download"></i>
-            </button>
-            <button class="btn-share">
-              <i class="bi bi-share"></i>
-            </button>
-          </div>
-        </div>
-
-        <div class="document-card">
-          <div class="document-icon">
-            <i class="bi bi-file-earmark-word"></i>
-          </div>
-          <h3 class="document-title">Compte Rendu Réunion</h3>
-          <p class="document-info">DOCX • 1.1 MB • Il y a 3 jours</p>
-          <div class="document-actions">
-            <button class="btn-download">
-              <i class="bi bi-download"></i>
-            </button>
-            <button class="btn-share">
-              <i class="bi bi-share"></i>
-            </button>
-          </div>
-        </div>
-
-        <div class="document-card">
-          <div class="document-icon">
-            <i class="bi bi-file-earmark-excel"></i>
-          </div>
-          <h3 class="document-title">Timesheet Mars</h3>
-          <p class="document-info">XLSX • 856 KB • Il y a 5 jours</p>
-          <div class="document-actions">
-            <button class="btn-download">
-              <i class="bi bi-download"></i>
-            </button>
-            <button class="btn-share">
-              <i class="bi bi-share"></i>
+              Télécharger
             </button>
           </div>
         </div>
       </div>
+
+      <div class="empty-state" *ngIf="documents.length === 0 && !loading">
+        <div class="empty-icon">
+          <i class="bi bi-folder2-open"></i>
+        </div>
+        <h3>Aucun document</h3>
+        <p>Vous n'avez pas encore de documents assignés.</p>
+      </div>
+
+      <div class="loading-state" *ngIf="loading">
+        <div class="spinner"></div>
+        <p>Chargement des documents...</p>
+      </div>
     </div>
 
-    <!-- ══ COMPÉTENCES ══ -->
+    <!-- â•â• COMPÉTENCES â•â• -->
     <div *ngIf="activeSection === 'competences'" class="section fade-in">
       <app-skills-profile></app-skills-profile>
     </div>
@@ -527,3 +513,5 @@
     </form>
   </div>
 </div>
+
+
