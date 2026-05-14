@@ -117,38 +117,14 @@
 
       <!-- Main Grid -->
       <section class="content-grid">
-        <!-- My Tasks -->
+        <!-- My Tasks with Time Tracking -->
         <div class="card tasks-card">
           <div class="card-header">
             <h2 class="card-title">Mes Tâches</h2>
             <button class="view-all-btn">Voir tout</button>
           </div>
-          <div class="tasks-list">
-            <div class="task-item" *ngFor="let task of myTasks.slice(0, 3)">
-              <div class="task-info">
-                <h4 class="task-title">{{ task.title }}</h4>
-                <p class="task-description">{{ task.description }}</p>
-                <div class="task-meta">
-                  <span class="due-date">
-                    <i class="bi bi-calendar"></i>
-                    {{ task.dueDate }}
-                  </span>
-                  <span class="priority" [style.color]="getPriorityColor(task.priority)">
-                    {{ task.priority }}
-                  </span>
-                </div>
-              </div>
-              <div class="task-progress">
-                <div class="progress-bar">
-                  <div 
-                    class="progress-fill" 
-                    [style.width.%]="task.progress"
-                    [style.background-color]="getStatusColor(task.status)">
-                  </div>
-                </div>
-                <span class="progress-text">{{ task.progress }}%</span>
-              </div>
-            </div>
+          <div class="tasks-content">
+            <app-employee-tasks [employeeId]="currentEmployee?.id"></app-employee-tasks>
           </div>
         </div>
 
@@ -214,120 +190,12 @@
 
     <!-- â•â• MES TÃ‚CHES â•â• -->
     <div *ngIf="activeSection === 'taches'" class="section fade-in">
-      <div class="section-header">
-        <h2 class="section-title">Mes Tâches</h2>
-        <div class="section-actions">
-          <div class="filter-controls">
-            <select class="filter-select">
-              <option>Toutes les priorités</option>
-              <option>Haute</option>
-              <option>Moyenne</option>
-              <option>Basse</option>
-            </select>
-            <select class="filter-select">
-              <option>Tous les statuts</option>
-              <option>Ã€ faire</option>
-              <option>En cours</option>
-              <option>Terminé</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div class="tasks-grid">
-        <div class="task-card" *ngFor="let task of myTasks" [class]="{ 'completed': task.status === 'done' }">
-          <div class="task-header">
-            <h3 class="task-title">{{ task.title }}</h3>
-            <span class="task-priority" [style.background-color]="getPriorityColor(task.priority)">
-              {{ task.priority }}
-            </span>
-          </div>
-          <p class="task-description">{{ task.description }}</p>
-          <div class="task-meta">
-            <span class="task-due">
-              <i class="bi bi-calendar"></i>
-              {{ task.dueDate }}
-            </span>
-            <span class="task-status" [style.color]="getStatusColor(task.status)">
-              {{ getTaskStatusLabel(task.status) }}
-            </span>
-          </div>
-          <div class="task-progress-section">
-            <div class="progress-header">
-              <span>Progression</span>
-              <span>{{ task.progress }}%</span>
-            </div>
-            <div class="progress-bar">
-              <div 
-                class="progress-fill" 
-                [style.width.%]="task.progress"
-                [style.background-color]="getStatusColor(task.status)">
-              </div>
-            </div>
-          </div>
-          <div class="task-actions">
-            <button class="btn-action" (click)="increaseTaskProgress(task.id)">
-              <i class="bi bi-plus"></i>
-              +10%
-            </button>
-            <button class="btn-action btn-complete" (click)="completeTask(task.id)" *ngIf="task.status !== 'done'">
-              <i class="bi bi-check"></i>
-              Terminer
-            </button>
-          </div>
-        </div>
-      </div>
+      <app-employee-tasks [employeeId]="currentEmployee?.id"></app-employee-tasks>
     </div>
 
     <!-- â•â• TIMESHEET â•â• -->
     <div *ngIf="activeSection === 'timesheet'" class="section fade-in">
-      <div class="section-header">
-        <h2 class="section-title">Timesheet</h2>
-        <div class="section-actions">
-          <button class="btn-primary" (click)="openCreateTimesheetModal()">
-            <i class="bi bi-plus-circle"></i>
-            Ajouter Timesheet
-          </button>
-        </div>
-      </div>
-
-      <div class="timesheet-table-container">
-        <table class="timesheet-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Projet</th>
-              <th>Heures</th>
-              <th>Description</th>
-              <th>Statut</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let timesheet of myTimesheets">
-              <td>{{ timesheet.date }}</td>
-              <td>{{ timesheet.project }}</td>
-              <td>{{ timesheet.hours }}h</td>
-              <td>{{ timesheet.description }}</td>
-              <td>
-                <span class="status-badge" [style.background-color]="getStatusColor(timesheet.status)">
-                  {{ getTimesheetStatusLabel(timesheet.status) }}
-                </span>
-              </td>
-              <td>
-                <div class="table-actions">
-                  <button class="btn-edit" title="Modifier">
-                    <i class="bi bi-pencil"></i>
-                  </button>
-                  <button class="btn-submit" title="Soumettre" (click)="submitTimesheet(timesheet.id)" *ngIf="timesheet.status === 'pending'">
-                    <i class="bi bi-send"></i>
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <app-employee-timesheet></app-employee-timesheet>
     </div>
 
     <!-- â•â• RÉUNIONS â•â• -->
@@ -441,77 +309,6 @@
       <app-skills-profile></app-skills-profile>
     </div>
   </main>
-</div>
-
-<!-- Modal de création de timesheet -->
-<div *ngIf="showCreateTimesheetModal" class="modal-overlay" (click)="closeCreateTimesheetModal()">
-  <div class="modal-content" (click)="stopPropagation($event)">
-    <div class="modal-header">
-      <h2 class="modal-title">Ajouter un Timesheet</h2>
-      <button class="modal-close" (click)="closeCreateTimesheetModal()">
-        <i class="bi bi-x-lg"></i>
-      </button>
-    </div>
-    
-    <form class="modal-body" (ngSubmit)="createTimesheet()">
-      <div class="form-group">
-        <label for="timesheetDate">Date *</label>
-        <input 
-          type="date" 
-          id="timesheetDate" 
-          name="timesheetDate"
-          [(ngModel)]="newTimesheet.date" 
-          required>
-      </div>
-
-      <div class="form-group">
-        <label for="timesheetProject">Projet</label>
-        <select 
-          id="timesheetProject" 
-          name="timesheetProject"
-          [(ngModel)]="newTimesheet.project_id">
-          <option value="">Sélectionner un projet</option>
-          <option *ngFor="let project of availableProjects" [value]="project.id">
-            {{ project.name }}
-          </option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label for="timesheetHours">Heures travaillées *</label>
-        <input 
-          type="number" 
-          id="timesheetHours" 
-          name="timesheetHours"
-          [(ngModel)]="newTimesheet.hours" 
-          required
-          min="0.5"
-          max="24"
-          step="0.5"
-          placeholder="8">
-      </div>
-
-      <div class="form-group">
-        <label for="timesheetDescription">Description</label>
-        <textarea 
-          id="timesheetDescription" 
-          name="timesheetDescription"
-          [(ngModel)]="newTimesheet.description" 
-          rows="3"
-          placeholder="Description des tâches effectuées..."></textarea>
-      </div>
-
-      <div class="form-actions">
-        <button type="button" class="btn-secondary" (click)="closeCreateTimesheetModal()">
-          Annuler
-        </button>
-        <button type="submit" class="btn-primary">
-          <i class="bi bi-plus-circle"></i>
-          Créer
-        </button>
-      </div>
-    </form>
-  </div>
 </div>
 
 

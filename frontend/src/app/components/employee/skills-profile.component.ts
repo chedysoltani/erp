@@ -1,17 +1,21 @@
 import { Component, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { ReactiveFormsModule } from '@angular/forms';
 import { FormBuilder, FormGroup, FormArray, Validators } from '@angular/forms';
 import { SkillsService } from '../../services/skills.service';
-import { 
-  EmployeeSkillsProfile, 
-  Skill, 
-  Technology, 
+import {
+  EmployeeSkillsProfile,
+  Skill,
+  Technology,
   Speciality,
   SkillCategory,
-  TECHNOLOGY_CATEGORIES 
+  TECHNOLOGY_CATEGORIES
 } from '../../models/skills.model';
 
 @Component({
   selector: 'app-skills-profile',
+  standalone: true,
+  imports: [CommonModule, ReactiveFormsModule],
   templateUrl: './skills-profile.component.html',
   styleUrls: ['./skills-profile.component.css']
 })

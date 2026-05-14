@@ -1,9 +1,14 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ManagerAuthService, Employee } from '../../services/manager-auth.service';
 import { EmployeeService } from '../../services/employee.service';
 import { DocumentsService } from '../../services/documents.service';
 import { Document } from '../../models/document.model';
+import { EmployeeTasksComponent } from './employee-tasks.component';
+import { EmployeeTimesheetComponent } from './employee-timesheet.component';
+import { SkillsProfileComponent } from './skills-profile.component';
 
 export type SectionId = 'dashboard' | 'taches' | 'timesheet' | 'reunions' | 'documents' | 'competences';
 
@@ -43,7 +48,9 @@ interface DisplayTimesheet {
 @Component({
   selector: 'app-employee-dashboard',
   templateUrl: './employee-dashboard.component.html',
-  styleUrls: ['./employee-dashboard.component.css']
+  styleUrls: ['./employee-dashboard.component.css'],
+  standalone: true,
+  imports: [CommonModule, FormsModule, EmployeeTasksComponent, EmployeeTimesheetComponent, SkillsProfileComponent]
 })
 export class EmployeeDashboardComponent implements OnInit {
   activeSection: SectionId = 'dashboard';
