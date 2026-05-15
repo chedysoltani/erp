@@ -35,6 +35,7 @@ const employeeSkillsRoutes = require('./routes/employeeSkills');
 const managerRoutes = require('./routes/manager');
 const documentRoutes = require('./routes/documents');
 const analyticsRoutes = require('./routes/analytics');
+const iaRoutes = require('./routes/ia');
 
 app.use('/api/users', userRoutes);
 app.use('/api/projects', projectRoutes);
@@ -46,6 +47,7 @@ app.use('/api/employee', employeeSkillsRoutes);
 app.use('/api/manager', managerRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/ia', iaRoutes);
 
 // Serve uploads as static
 const path = require('path');

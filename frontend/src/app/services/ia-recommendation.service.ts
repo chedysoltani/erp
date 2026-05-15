@@ -18,6 +18,7 @@ import {
 })
 export class IARecommendationService {
   private apiUrl = 'http://localhost:3001/api/manager';
+  private iaApiUrl = 'http://localhost:3001/api/ia';
 
   constructor(private http: HttpClient) {}
 
@@ -77,6 +78,41 @@ export class IARecommendationService {
         console.error('Error simulating project:', error);
         // Fallback vers l'algorithme local
         return of(this.localProjectSimulation(project));
+      })
+    );
+  }
+
+  // --- NOUVELLES METHODES POUR L'ANALYSE DE PDF ---
+
+  simulateProjectFromPdf(file: File): Observable<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return this.http.post(`${this.iaApiUrl}/simulate-pdf`, formData).pipe(
+      map((response: any) => {
+        if (response.success) {
+          return response.data;
+        }
+        throw new Error(response.message || 'Erreur lors de la simulation via PDF');
+      }),
+      catchError(error => {
+        console.error('Error simulating project from PDF:', error);
+        return throwError(() => error);
+      })
+    );
+  }
+
+  confirmGeneratedProject(projectData: any, managerId: number): Observable<any> {
+    return this.http.post(`${this.iaApiUrl}/confirm-project`, { projectData, manager_id: managerId }).pipe(
+      map((response: any) => {
+        if (response.success) {
+          return response.data;
+        }
+        throw new Error(response.message || 'Erreur lors de la création du projet');
+      }),
+      catchError(error => {
+        console.error('Error confirming project:', error);
+        return throwError(() => error);
       })
     );
   }

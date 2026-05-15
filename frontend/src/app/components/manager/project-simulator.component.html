@@ -10,8 +10,40 @@
     </p>
   </div>
 
-  <!-- Formulaire de configuration -->
-  <div class="project-form-container">
+  <!-- Tabs Mode -->
+  <div class="mode-tabs">
+    <button class="tab-btn" [class.active]="activeMode === 'pdf'" (click)="setMode('pdf')">
+      <i class="bi bi-file-earmark-pdf"></i>
+      Génération depuis un PDF
+    </button>
+    <button class="tab-btn" [class.active]="activeMode === 'manual'" (click)="setMode('manual')">
+      <i class="bi bi-pencil-square"></i>
+      Configuration Manuelle
+    </button>
+  </div>
+
+  <!-- Mode PDF -->
+  <div class="pdf-upload-container" *ngIf="activeMode === 'pdf'">
+    <div class="upload-box" (click)="fileInput.click()">
+      <i class="bi bi-cloud-arrow-up display-4 text-primary"></i>
+      <h4>Uploader le cahier des charges</h4>
+      <p>Sélectionnez un fichier PDF contenant les spécifications de votre projet.</p>
+      <input type="file" #fileInput (change)="onFileSelected($event)" accept="application/pdf" style="display: none;">
+      <p *ngIf="selectedFile" class="selected-file-name text-success mt-2">
+        <i class="bi bi-check-circle-fill"></i> {{ selectedFile.name }}
+      </p>
+    </div>
+    
+    <div class="form-actions mt-4 text-center">
+      <button type="button" class="btn-primary btn-lg" (click)="simulateFromPdf()" [disabled]="!selectedFile || loading">
+        <i class="bi bi-magic"></i>
+        {{ loading ? 'Analyse par IA en cours...' : 'Générer le planning avec IA' }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Formulaire de configuration Manuelle -->
+  <div class="project-form-container" *ngIf="activeMode === 'manual'">
     <form class="project-form" [formGroup]="projectForm">
       <!-- Informations générales -->
       <div class="form-section">
@@ -354,8 +386,70 @@
     </div>
   </div>
 
-  <!-- Résultats de la simulation -->
-  <div class="simulation-results" *ngIf="showResults && !loading">
+  <!-- Résultats de la simulation PDF -->
+  <div class="simulation-results" *ngIf="showResults && !loading && activeMode === 'pdf'">
+    <div class="results-header">
+      <h3>Plan du Projet Généré par l'IA</h3>
+      <div class="risk-indicator" [style.background-color]="getRiskLevelColor(generatedProjectData?.complexity === 'élevé' ? 'high' : generatedProjectData?.complexity === 'moyen' ? 'medium' : 'low')">
+        <i class="bi bi-shield-exclamation"></i>
+        Complexité: {{ generatedProjectData?.complexity | titlecase }}
+      </div>
+    </div>
+
+    <div class="results-summary">
+      <div class="summary-card">
+        <h4><i class="bi bi-info-circle"></i> {{ generatedProjectData?.projectName }}</h4>
+        <p>{{ generatedProjectData?.description }}</p>
+      </div>
+      <div class="summary-card">
+        <h4><i class="bi bi-calendar-check"></i> Calendrier</h4>
+        <p><strong>{{ generatedProjectData?.duration }}</strong></p>
+        <p>Du {{ formatDate(generatedProjectData?.timeline?.startDate) }} au {{ formatDate(generatedProjectData?.timeline?.endDate) }}</p>
+      </div>
+    </div>
+
+    <!-- Phases et Tâches -->
+    <div class="phases-container mt-4">
+      <h4 class="mb-3"><i class="bi bi-list-task"></i> Phases et Tâches</h4>
+      
+      <div class="phase-card" *ngFor="let phase of generatedProjectData?.phases">
+        <div class="phase-header">
+          <h5>{{ phase.name }}</h5>
+          <p class="phase-desc">{{ phase.description }}</p>
+        </div>
+        
+        <div class="tasks-grid">
+          <div class="task-card" *ngFor="let task of phase.tasks">
+            <div class="task-title-row">
+              <h6>{{ task.title }}</h6>
+              <span class="priority-badge" [style.background-color]="getPriorityColor(task.priority)">
+                {{ task.priority }}
+              </span>
+            </div>
+            <p class="task-desc">{{ task.description }}</p>
+            <div class="task-meta">
+              <span><i class="bi bi-clock"></i> {{ task.estimatedTime }}</span>
+              <span><i class="bi bi-person-badge"></i> {{ task.role }}</span>
+            </div>
+            <div class="task-deps" *ngIf="task.dependencies?.length > 0">
+              <small><i class="bi bi-link"></i> Dépend de: {{ task.dependencies.join(', ') }}</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bouton de confirmation -->
+    <div class="form-actions mt-4 text-center">
+      <button type="button" class="btn-success btn-lg" (click)="confirmGeneratedProject()" [disabled]="confirming">
+        <i class="bi bi-check2-circle"></i>
+        {{ confirming ? 'Création en cours...' : 'Confirmer et Créer le Projet' }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Résultats de la simulation Manuelle -->
+  <div class="simulation-results" *ngIf="showResults && !loading && activeMode === 'manual'">
     <div class="results-header">
       <h3>Résultats de la Simulation</h3>
       <div class="risk-indicator" 

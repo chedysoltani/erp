@@ -428,6 +428,8 @@ interface GanttViewMode {
       font-weight: 600;
       color: #1565c0;
     }
+
+    .gantt-row {
       display: flex;
       padding: 12px;
       border-bottom: 1px solid #e0e0e0;
@@ -640,7 +642,7 @@ export class EnhancedGanttComponent implements OnInit, OnChanges {
   constructor(
     private analyticsService: AnalyticsService,
     private taskEnhancedService: TaskEnhancedService
-  ) {}
+  ) { }
 
   get projectProgressDisplay(): number {
     const p = this.projectSummary?.progress;

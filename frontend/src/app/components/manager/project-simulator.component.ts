@@ -19,6 +19,12 @@ export class ProjectSimulatorComponent implements OnInit {
   loading: boolean = false;
   showResults: boolean = false;
   
+  // Nouveaux états pour le PDF
+  activeMode: 'pdf' | 'manual' = 'pdf';
+  selectedFile: File | null = null;
+  generatedProjectData: any = null;
+  confirming: boolean = false;
+  
   availableEmployees: { id: number; name: string; role: string }[] = [];
   
   // Options pour les compétences (chargées depuis le backend)
@@ -320,6 +326,80 @@ export class ProjectSimulatorComponent implements OnInit {
         console.error('Erreur lors de la simulation:', error);
         this.loading = false;
         alert('Erreur lors de la simulation du projet');
+      }
+    });
+  }
+
+  // --- NOUVELLES METHODES POUR LE PDF ---
+
+  setMode(mode: 'pdf' | 'manual') {
+    this.activeMode = mode;
+    this.showResults = false;
+    this.simulationResult = null;
+    this.generatedProjectData = null;
+  }
+
+  onFileSelected(event: any) {
+    const file = event.target.files[0];
+    if (file && file.type === 'application/pdf') {
+      this.selectedFile = file;
+    } else {
+      alert('Veuillez sélectionner un fichier PDF valide.');
+      this.selectedFile = null;
+    }
+  }
+
+  simulateFromPdf() {
+    if (!this.selectedFile) {
+      alert('Veuillez sélectionner un fichier PDF d\'abord.');
+      return;
+    }
+
+    this.loading = true;
+    this.showResults = false;
+
+    this.iaService.simulateProjectFromPdf(this.selectedFile).subscribe({
+      next: (projectData) => {
+        console.log('✅ Plan généré par IA depuis le PDF:', projectData);
+        this.generatedProjectData = projectData;
+        this.showResults = true;
+        this.loading = false;
+      },
+      error: (error) => {
+        console.error('Erreur IA PDF:', error);
+        this.loading = false;
+        alert('Erreur lors de l\'analyse du PDF par l\'IA.');
+      }
+    });
+  }
+
+  confirmGeneratedProject() {
+    if (!this.generatedProjectData) return;
+
+    this.confirming = true;
+    
+    // Essayer de récupérer l'ID du manager
+    let managerId = 1;
+    try {
+      const currentManagerStr = localStorage.getItem('currentManager');
+      if (currentManagerStr) {
+        managerId = JSON.parse(currentManagerStr).id;
+      }
+    } catch(e) {}
+
+    this.iaService.confirmGeneratedProject(this.generatedProjectData, managerId).subscribe({
+      next: (response) => {
+        console.log('✅ Projet créé avec succès:', response);
+        this.confirming = false;
+        alert('Projet confirmé et créé avec succès !');
+        this.showResults = false;
+        this.generatedProjectData = null;
+        this.selectedFile = null;
+      },
+      error: (error) => {
+        console.error('Erreur confirmation projet:', error);
+        this.confirming = false;
+        alert('Erreur lors de la création du projet.');
       }
     });
   }
