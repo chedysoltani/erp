@@ -7,6 +7,7 @@ import { ProjectSimulatorComponent } from './project-simulator.component';
 import { EnhancedGanttComponent } from './enhanced-gantt.component';
 import { TaskTimeTrackerComponent } from './task-time-tracker.component';
 import { ManagerRoutingModule } from './manager-routing.module';
+import { ManagerAttendanceComponent } from './manager-attendance.component';
 import { IARecommendationService } from '../../services/ia-recommendation.service';
 import { SkillsService } from '../../services/skills.service';
 import { AnalyticsService } from '../../services/analytics.service';
@@ -24,7 +25,8 @@ import { TaskEnhancedService } from '../../services/task-enhanced.service';
     ReactiveFormsModule,
     ManagerRoutingModule,
     EnhancedGanttComponent,
-    TaskTimeTrackerComponent
+    TaskTimeTrackerComponent,
+    ManagerAttendanceComponent
   ],
   providers: [
     IARecommendationService,

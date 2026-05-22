@@ -3,41 +3,33 @@ const jwt = require('jsonwebtoken');
 const auth = (req, res, next) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
-    
+
     if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: 'Accès refusé. Aucun jeton fourni.'
-      });
+      return res.status(401).json({ success: false, message: 'Accès refusé. Aucun jeton fourni.' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({ success: false, message: 'Configuration serveur invalide.' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded;
     next();
   } catch (error) {
-    res.status(401).json({
-      success: false,
-      message: 'Jeton invalide.'
-    });
+    res.status(401).json({ success: false, message: 'Jeton invalide ou expiré.' });
   }
 };
 
 const isManager = (req, res, next) => {
   if (req.user.role !== 'manager' && req.user.role !== 'admin') {
-    return res.status(403).json({
-      success: false,
-      message: 'Accès refusé. Rôle Manager requis.'
-    });
+    return res.status(403).json({ success: false, message: 'Accès refusé. Rôle Manager requis.' });
   }
   next();
 };
 
 const isEmployee = (req, res, next) => {
-  if (req.user.role !== 'employee' && req.user.role !== 'manager' && req.user.role !== 'admin') {
-    return res.status(403).json({
-      success: false,
-      message: 'Accès refusé. Rôle Employé requis.'
-    });
+  if (!['employee', 'manager', 'admin'].includes(req.user.role)) {
+    return res.status(403).json({ success: false, message: 'Accès refusé. Rôle Employé requis.' });
   }
   next();
 };

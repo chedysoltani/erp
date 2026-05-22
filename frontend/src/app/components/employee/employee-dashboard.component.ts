@@ -1,4 +1,6 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -9,8 +11,10 @@ import { Document } from '../../models/document.model';
 import { EmployeeTasksComponent } from './employee-tasks.component';
 import { EmployeeTimesheetComponent } from './employee-timesheet.component';
 import { SkillsProfileComponent } from './skills-profile.component';
+import { EmployeePointageComponent } from './employee-pointage.component';
+import { ToastService } from '../../services/toast.service';
 
-export type SectionId = 'dashboard' | 'taches' | 'timesheet' | 'reunions' | 'documents' | 'competences';
+export type SectionId = 'dashboard' | 'taches' | 'timesheet' | 'reunions' | 'documents' | 'competences' | 'pointage';
 
 interface DisplayTask {
   id: number;
@@ -50,9 +54,10 @@ interface DisplayTimesheet {
   templateUrl: './employee-dashboard.component.html',
   styleUrls: ['./employee-dashboard.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, EmployeeTasksComponent, EmployeeTimesheetComponent, SkillsProfileComponent]
+  imports: [CommonModule, FormsModule, EmployeeTasksComponent, EmployeeTimesheetComponent, SkillsProfileComponent, EmployeePointageComponent]
 })
-export class EmployeeDashboardComponent implements OnInit {
+export class EmployeeDashboardComponent implements OnInit, OnDestroy {
+  private destroy$ = new Subject<void>();
   activeSection: SectionId = 'dashboard';
   currentEmployee: Employee | null = null;
   loading = false;
@@ -76,125 +81,18 @@ export class EmployeeDashboardComponent implements OnInit {
   myTimesheets: DisplayTimesheet[] = [];
   recentActivities: any[] = [];
 
-  // Données mockées pour les tâches
-  baseTasks = [
-    {
-      id: 1,
-      title: 'Finaliser le rapport mensuel',
-      description: 'Préparer et soumettre le rapport d\'activité du mois',
-      priority: 'high',
-      dueDate: '03 Avril',
-      progress: 75,
-      status: 'in_progress',
-      assignee: 'Moi',
-      tags: ['rapport', 'mensuel']
-    },
-    {
-      id: 2,
-      title: 'Réunion client - Présentation',
-      description: 'Présenter les avancées du projet au client',
-      priority: 'high',
-      dueDate: '05 Avril',
-      progress: 50,
-      status: 'todo',
-      assignee: 'Moi',
-      tags: ['client', 'présentation']
-    },
-    {
-      id: 3,
-      title: 'Code review - Module authentification',
-      description: 'Revoir le code du module d\'authentification',
-      priority: 'medium',
-      dueDate: '04 Avril',
-      progress: 90,
-      status: 'in_progress',
-      assignee: 'Moi',
-      tags: ['code', 'review']
-    },
-    {
-      id: 4,
-      title: 'Mise à jour documentation technique',
-      description: 'Mettre à jour la documentation API',
-      priority: 'low',
-      dueDate: '08 Avril',
-      progress: 30,
-      status: 'todo',
-      assignee: 'Moi',
-      tags: ['documentation', 'api']
-    }
-  ];
-
-  // Données mockées pour les réunions
-  baseMeetings = [
-    {
-      id: 1,
-      title: 'Daily Stand-up',
-      type: 'team',
-      date: '01 Avril',
-      time: '09:00',
-      duration: '15 min',
-      participants: ['Jean Dupont', 'Marie Martin', 'Pierre Durand'],
-      location: 'Salle A',
-      description: 'Point quotidien sur l\'avancement des tâches'
-    },
-    {
-      id: 2,
-      title: 'Réunion projet ERP',
-      type: 'project',
-      date: '02 Avril',
-      time: '14:00',
-      duration: '1h',
-      participants: ['Jean Dupont', 'Sophie Lefebvre', 'Thomas Bernard'],
-      location: 'Salle B',
-      description: 'Discussion sur les avancées du projet ERP'
-    },
-    {
-      id: 3,
-      title: 'Review de code',
-      type: 'technical',
-      date: '03 Avril',
-      time: '10:30',
-      duration: '30 min',
-      participants: ['Marie Martin', 'Paul Lefevre'],
-      location: 'Visio',
-      description: 'Review du code du module authentification'
-    }
-  ];
-
-  // Données mockées pour les timesheets
-  baseTimesheets = [
-    {
-      id: 1,
-      date: '31 Mars',
-      project: 'Développement ERP',
-      hours: 8,
-      description: 'Développement module utilisateur',
-      status: 'validated'
-    },
-    {
-      id: 2,
-      date: '30 Mars',
-      project: 'Site E-commerce',
-      hours: 7.5,
-      description: 'Intégration panier d\'achat',
-      status: 'validated'
-    },
-    {
-      id: 3,
-      date: '29 Mars',
-      project: 'Application Mobile',
-      hours: 8,
-      description: 'Développement interface iOS',
-      status: 'pending'
-    }
-  ];
-
   constructor(
     private router: Router,
     private managerAuthService: ManagerAuthService,
     private employeeService: EmployeeService,
-    private documentsService: DocumentsService
+    private documentsService: DocumentsService,
+    private toast: ToastService
   ) {}
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
 
   ngOnInit() {
     this.checkEmployeeAuth();
@@ -228,52 +126,32 @@ export class EmployeeDashboardComponent implements OnInit {
     if (!employeeId) return;
 
     // Charger le dashboard complet
-    this.employeeService.getEmployeeDashboard(employeeId).subscribe({
+    this.employeeService.getEmployeeDashboard(employeeId).pipe(takeUntil(this.destroy$)).subscribe({
       next: (response) => {
         if (response.success) {
           const data = response.data;
-          
-          // Mettre à jour les statistiques
           this.employeeStats.tasksCompleted = data.stats.done;
           this.employeeStats.tasksInProgress = data.stats.in_progress;
           this.employeeStats.pendingTasks = data.stats.todo;
           this.employeeStats.upcomingMeetings = data.upcomingMeetings.length;
-          
-          // Mettre à jour les données
           this.myTasks = this.formatTasks(data.recentTasks);
           this.myMeetings = this.formatMeetings(data.upcomingMeetings);
-          
-          console.log('Données employé chargées:', response);
         }
       },
-      error: (error) => {
-        console.error('Erreur lors du chargement des données employé:', error);
-        // En cas d'erreur, utiliser les données mockées
-        this.loadMockData();
+      error: () => {
+        this.toast.error('Erreur lors du chargement des données');
       }
     });
 
     // Charger les timesheets séparément
     this.loadTimesheets();
 
-    this.employeeService.getTaskNotifications(employeeId).subscribe({
+    this.employeeService.getTaskNotifications(employeeId).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res: any) => {
-        if (res?.success) {
-          this.taskNotificationCount = Number(res.unreadCount) || 0;
-        }
+        if (res?.success) this.taskNotificationCount = Number(res.unreadCount) || 0;
       },
-      error: () => {
-        this.taskNotificationCount = 0;
-      }
+      error: () => { this.taskNotificationCount = 0; }
     });
-  }
-
-  loadMockData() {
-    // Charger les données mockées en fallback
-    this.myTasks = [...this.baseTasks];
-    this.myMeetings = [...this.baseMeetings];
-    this.myTimesheets = [...this.baseTimesheets];
-    this.calculateStats();
   }
 
   formatTasks(tasks: any[]): DisplayTask[] {
@@ -376,23 +254,19 @@ export class EmployeeDashboardComponent implements OnInit {
       
       // Mettre à jour sur le backend
       if (this.currentEmployee) {
-        this.employeeService.updateTaskStatus(this.currentEmployee.id, taskId, newStatus).subscribe({
+        this.employeeService.updateTaskStatus(this.currentEmployee.id, taskId, newStatus).pipe(takeUntil(this.destroy$)).subscribe({
           next: (response) => {
             if (response.success) {
               task.status = newStatus;
               this.calculateStats();
-              console.log('Statut de tâche mis à jour:', response);
             }
           },
-          error: (error) => {
-            console.error('Erreur lors de la mise à jour du statut:', error);
-            // En cas d'erreur, mettre à jour localement quand même
+          error: () => {
             task.status = newStatus;
             this.calculateStats();
           }
         });
       } else {
-        // Fallback local si pas d'employé connecté
         task.status = newStatus;
         this.calculateStats();
       }
@@ -412,19 +286,11 @@ export class EmployeeDashboardComponent implements OnInit {
   }
 
   loadMeetingsFromDatabase() {
-    console.log('Début du chargement des réunions assignées depuis la base...');
-    
-    if (!this.currentEmployee) {
-      console.error('Aucun employé connecté pour charger les réunions');
-      return;
-    }
+    if (!this.currentEmployee) return;
 
-    this.managerAuthService.getEmployeeMeetings(this.currentEmployee.id).subscribe({
+    this.managerAuthService.getEmployeeMeetings(this.currentEmployee.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: (response: any) => {
         const meetings = response.data || response;
-        console.log('Réunions assignées chargées depuis la base:', meetings);
-        
-        // Transformer les réunions pour l'affichage
         this.myMeetings = meetings.map((meeting: any) => ({
           id: meeting.id,
           title: meeting.title,
@@ -432,23 +298,16 @@ export class EmployeeDashboardComponent implements OnInit {
           date: new Date(meeting.date_time).toLocaleDateString('fr-FR'),
           time: new Date(meeting.date_time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
           duration: meeting.duration,
-          participants: [], // Sera rempli plus tard si nécessaire
+          participants: [],
           location: meeting.location,
           description: meeting.description,
           status: meeting.meeting_status || 'pending',
           color: meeting.type === 'team' ? '#10B981' : meeting.type === 'client' ? '#3B82F6' : meeting.type === 'technical' ? '#F59E0B' : '#8B5CF6'
         }));
-        
-        console.log('Réunions transformées pour affichage:', this.myMeetings);
-        
-        // Mettre à jour les statistiques
         this.calculateStats();
       },
-      error: (error: any) => {
-        console.error('Erreur lors du chargement des réunions assignées:', error);
-        // En cas d'erreur, utiliser les données mockées
-        console.log('Fallback: utilisation des données mockées pour les réunions');
-        this.myMeetings = [...this.baseMeetings];
+      error: () => {
+        this.myMeetings = [];
         this.calculateStats();
       }
     });
@@ -458,24 +317,20 @@ export class EmployeeDashboardComponent implements OnInit {
   joinMeeting(meetingId: number) {
     const meeting = this.myMeetings.find(m => m.id === meetingId);
     if (meeting) {
-      alert(`Rejoindre la réunion: ${meeting.title}`);
-      // TODO: Implémenter la logique pour rejoindre la réunion
+      this.toast.warning(`Rejoindre la réunion: ${meeting.title} — fonctionnalité à venir`);
     }
   }
 
   updateMeetingStatus(meetingId: number, status: string) {
     if (!this.currentEmployee) return;
-    
-    this.managerAuthService.updateMeetingAttendance(meetingId, this.currentEmployee.id, status).subscribe({
-      next: (response: any) => {
-        console.log('Statut de réunion mis à jour:', response);
-        alert('Statut de participation mis à jour avec succès');
-        // Recharger les réunions
+
+    this.managerAuthService.updateMeetingAttendance(meetingId, this.currentEmployee.id, status).pipe(takeUntil(this.destroy$)).subscribe({
+      next: () => {
+        this.toast.success('Statut de participation mis à jour');
         this.loadMeetingsFromDatabase();
       },
-      error: (error: any) => {
-        console.error('Erreur lors de la mise à jour du statut:', error);
-        alert('Erreur lors de la mise à jour du statut');
+      error: () => {
+        this.toast.error('Erreur lors de la mise à jour du statut');
       }
     });
   }
@@ -483,39 +338,33 @@ export class EmployeeDashboardComponent implements OnInit {
   // Méthodes pour les timesheets
   loadTimesheets() {
     if (!this.currentEmployee) return;
-    
-    this.employeeService.getEmployeeTimesheets(this.currentEmployee.id).subscribe({
+
+    this.employeeService.getEmployeeTimesheets(this.currentEmployee.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: (response) => {
         if (response.success) {
           this.myTimesheets = response.data;
-          console.log('Timesheets chargés:', this.myTimesheets);
           this.calculateStats();
         }
       },
-      error: (error) => {
-        console.error('Erreur lors du chargement des timesheets:', error);
-        // En cas d'erreur, utiliser les données mockées
-        this.myTimesheets = [...this.baseTimesheets];
+      error: () => {
+        this.myTimesheets = [];
       }
     });
   }
 
   submitTimesheet(timesheetId: number) {
     if (!this.currentEmployee) return;
-    
-    this.employeeService.submitTimesheet(this.currentEmployee.id, timesheetId).subscribe({
+
+    this.employeeService.submitTimesheet(this.currentEmployee.id, timesheetId).pipe(takeUntil(this.destroy$)).subscribe({
       next: (response) => {
         if (response.success) {
           const timesheet = this.myTimesheets.find(t => t.id === timesheetId);
-          if (timesheet) {
-            timesheet.status = 'submitted';
-            alert('Timesheet soumis pour validation');
-          }
+          if (timesheet) timesheet.status = 'submitted';
+          this.toast.success('Timesheet soumis pour validation');
         }
       },
-      error: (error) => {
-        console.error('Erreur lors de la soumission du timesheet:', error);
-        alert('Erreur lors de la soumission du timesheet');
+      error: () => {
+        this.toast.error('Erreur lors de la soumission du timesheet');
       }
     });
   }
@@ -541,21 +390,11 @@ export class EmployeeDashboardComponent implements OnInit {
   loadAvailableProjects() {
     if (!this.currentEmployee) return;
     
-    this.employeeService.getEmployeeProjects(this.currentEmployee.id).subscribe({
+    this.employeeService.getEmployeeProjects(this.currentEmployee.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: (response) => {
-        if (response.success) {
-          this.availableProjects = response.data;
-        }
+        if (response.success) this.availableProjects = response.data;
       },
-      error: (error) => {
-        console.error('Erreur lors du chargement des projets:', error);
-        // Projets par défaut si erreur
-        this.availableProjects = [
-          { id: 1, name: 'Développement ERP' },
-          { id: 2, name: 'Site E-commerce' },
-          { id: 3, name: 'Application Mobile' }
-        ];
-      }
+      error: () => { this.availableProjects = []; }
     });
   }
 
@@ -577,7 +416,7 @@ export class EmployeeDashboardComponent implements OnInit {
     if (!this.currentEmployee) return;
     
     if (!this.newTimesheet.date || !this.newTimesheet.hours) {
-      alert('Veuillez remplir tous les champs obligatoires');
+      this.toast.warning('Veuillez remplir tous les champs obligatoires');
       return;
     }
 
@@ -589,17 +428,16 @@ export class EmployeeDashboardComponent implements OnInit {
       status: 'pending'
     };
 
-    this.employeeService.createTimesheet(this.currentEmployee.id, timesheetData).subscribe({
+    this.employeeService.createTimesheet(this.currentEmployee.id, timesheetData).pipe(takeUntil(this.destroy$)).subscribe({
       next: (response) => {
         if (response.success) {
-          alert('Timesheet créé avec succès');
+          this.toast.success('Timesheet créé avec succès');
           this.closeCreateTimesheetModal();
-          this.loadTimesheets(); // Recharger la liste
+          this.loadTimesheets();
         }
       },
-      error: (error) => {
-        console.error('Erreur lors de la création du timesheet:', error);
-        alert('Erreur lors de la création du timesheet');
+      error: () => {
+        this.toast.error('Erreur lors de la création du timesheet');
       }
     });
   }

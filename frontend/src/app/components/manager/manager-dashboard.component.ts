@@ -1,15 +1,18 @@
-import { Component, HostListener, OnInit } from '@angular/core';
+import { Component, HostListener, OnInit, OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
+import { forkJoin, Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { ManagerAuthService, Manager, Project, Meeting } from '../../services/manager-auth.service';
 import { DocumentsService } from '../../services/documents.service';
 import { AnalyticsService } from '../../services/analytics.service';
 import { TaskEnhancedService } from '../../services/task-enhanced.service';
 import { IARecommendationService } from '../../services/ia-recommendation.service';
+import { ToastService } from '../../services/toast.service';
 import { Document } from '../../models/document.model';
 
 export type SectionId =
   | 'dashboard' | 'projets' | 'taches' | 'gantt' | 'analytics'
-  | 'utilisateurs' | 'reunions' | 'recommandations' | 'simulateur' | 'documents' | 'planning';
+  | 'utilisateurs' | 'reunions' | 'recommandations' | 'simulateur' | 'documents' | 'planning' | 'presence';
 
 interface DisplayProject {
   id: number;
@@ -61,7 +64,9 @@ interface Task {
   templateUrl: './manager-dashboard.component.html',
   styleUrls: ['./manager-dashboard.component.css', './calendar-improvements.css', './tasks-improvements.css', './gantt-preview.css']
 })
-export class ManagerDashboardComponent implements OnInit {
+export class ManagerDashboardComponent implements OnInit, OnDestroy {
+  private destroy$ = new Subject<void>();
+
   activeSection: SectionId = 'dashboard';
   isScrolled = false;
   showCreateProjectModal = false;
@@ -71,16 +76,10 @@ export class ManagerDashboardComponent implements OnInit {
   showEditUserModal = false;
   selectedProject: any = null;
   projectToEdit: any = {
-    name: '',
-    description: '',
-    team: '',
-    priority: 'medium',
-    startDate: '',
-    endDate: '',
-    budget: 0
+    name: '', description: '', team: '', priority: 'medium',
+    startDate: '', endDate: '', budget: 0
   };
 
-  // Propriétés pour les réunions
   showCreateMeetingModal = false;
   showViewMeetingModal = false;
   showEditMeetingModal = false;
@@ -89,44 +88,20 @@ export class ManagerDashboardComponent implements OnInit {
   selectedDay: CalendarDay | null = null;
   selectedDayMeetings: any[] = [];
   meetingToEdit: any = {
-    title: '',
-    date: '',
-    duration: '1h',
-    location: 'Salle A',
-    type: 'team',
-    agenda: [],
-    participants: [],
-    selectedEmployees: [],
-    notes: ''
+    title: '', date: '', duration: '1h', location: 'Salle A',
+    type: 'team', agenda: [], participants: [], selectedEmployees: [], notes: ''
   };
-
   newMeeting: any = {
-    title: '',
-    date: '',
-    duration: '1h',
-    location: 'Salle A',
-    type: 'team',
-    agenda: [],
-    participants: [],
-    selectedEmployees: [],
-    notes: ''
+    title: '', date: '', duration: '1h', location: 'Salle A',
+    type: 'team', agenda: [], participants: [], selectedEmployees: [], notes: ''
   };
 
-  // Propriétés pour les documents
   showAddDocumentModal = false;
   selectedFile: File | null = null;
-  newDocData = {
-    title: '',
-    description: '',
-    employeeId: null as number | null
-  };
-  searchTerm: string = '';
+  newDocData = { title: '', description: '', employeeId: null as number | null };
+  searchTerm = '';
 
-  // Propriétés pour les plannings
   savedPlannings: any[] = [];
-
-
-  // Propriétés pour la navigation du calendrier
   currentCalendarDate = new Date();
   calendarMonth = '';
   calendarYear = 0;
@@ -134,386 +109,6 @@ export class ManagerDashboardComponent implements OnInit {
   currentManager: Manager | null = null;
   loading = false;
 
-  ngOnInit() {
-    this.currentManager = this.managerAuthService.currentManagerValue;
-    
-    // Vérifier si le manager est connecté
-    if (!this.currentManager) {
-      this.router.navigate(['/manager-login']);
-      return;
-    }
-
-    // S'abonner aux changements de manager
-    this.managerAuthService.currentManager.subscribe(manager => {
-      this.currentManager = manager;
-      if (!manager) {
-        this.router.navigate(['/manager-login']);
-      }
-    });
-
-    // Charger les projets depuis la base de données
-    this.loadProjectsFromDatabase();
-    
-    // Charger les tâches depuis la base de données
-    this.loadTasksFromDatabase();
-    
-    // Charger les utilisateurs depuis la base de données
-    this.loadUsersFromDatabase();
-    
-    // Charger les réunions depuis la base de données
-    this.loadMeetingsFromDatabase();
-    
-    // Charger les documents
-    this.loadDocuments();
-    
-    // Charger les plannings
-    this.loadPlannings();
-    
-    // Les données seront chargées depuis la base de données via les méthodes appelées ci-dessus
-  }
-
-  loadProjectsFromDatabase() {
-    console.log('Début du chargement des projets depuis la base...');
-    console.log('Manager connecté:', this.currentManager);
-    
-    if (!this.currentManager) {
-      console.error('Aucun manager connecté pour charger les projets');
-      return;
-    }
-
-    this.managerAuthService.getManagerProjects().subscribe({
-      next: (response: any) => {
-        console.log('Réponse complète du backend:', response);
-        const projects = response.data || response; // Gérer les deux formats possibles
-        console.log('Projets chargés depuis la base:', projects);
-        console.log('Nombre de projets:', projects.length);
-        
-        // Transformer les projets pour l'affichage
-        this.recentProjects = projects.map((project: any) => ({
-          id: project.id,
-          name: project.name,
-          description: project.description || '',
-          progress: project.progress,
-          team: this.getTeamSize(project.team),
-          deadline: project.deadline,
-          status: project.status,
-          startDate: project.startDate,
-          endDate: project.endDate,
-          budget: project.budget,
-          priority: project.priority
-        }));
-        
-        // Mettre à jour les statistiques
-        this.globalStats.activeProjects = this.recentProjects.length;
-        
-        console.log('Projets transformés pour affichage:', this.recentProjects);
-        console.log('Statistiques mises à jour:', this.globalStats.activeProjects);
-      },
-      error: (error: any) => {
-        console.error('Erreur lors du chargement des projets:', error);
-        console.error('Status:', error.status);
-        console.error('Message:', error.message);
-        console.error('Error body:', error.error);
-        
-        // En cas d'erreur, garder les données locales
-        console.log('Fallback: utilisation des données locales');
-        console.log('Projets locaux actuels:', this.recentProjects.length);
-      }
-    });
-  }
-
-  loadTasksFromDatabase() {
-    console.log('Début du chargement des tâches depuis la base...');
-    
-    if (!this.currentManager) {
-      console.error('Aucun manager connecté pour charger les tâches');
-      return;
-    }
-
-    // Initialiser le tableau des tâches
-    this.tasks = [];
-
-    // Charger les tâches par statut pour le Kanban
-    this.loadTasksByStatus('todo');
-    this.loadTasksByStatus('in_progress');
-    this.loadTasksByStatus('done');
-    
-    // Appeler calculateStats après un délai pour laisser le temps aux chargements asynchrones
-    setTimeout(() => {
-      console.log('Recalcul des statistiques après chargement des tâches...');
-      this.calculateStats();
-    }, 1000);
-  }
-
-  loadUsersFromDatabase() {
-    if (!this.currentManager) {
-      console.error('Aucun manager connecté pour charger les utilisateurs');
-      return;
-    }
-
-    this.managerAuthService.getAllUsers().subscribe({
-      next: (response: any) => {
-        const users = response.data || response;
-        
-        // Transformer les utilisateurs pour l'affichage
-        this.allUsers = users.map((user: any) => ({
-          id: user.id,
-          nom: user.nom,
-          prenom: user.prenom,
-          email: user.email,
-          role: user.role,
-          telephone: user.telephone,
-          avatarColor: this.getAvatarColor(user.id),
-          status: user.status || 'active',
-          date_creation: user.date_creation || user.created_at,
-          last_login: user.last_login,
-          name: `${user.prenom} ${user.nom}`,
-          initials: `${user.prenom[0]}${user.nom[0]}`,
-          phone: user.telephone,
-          createdAt: user.date_creation || user.created_at,
-          active: (user.status || 'active') === 'active',
-          completedTasks: Math.floor(Math.random() * 10),
-          ongoingTasks: Math.floor(Math.random() * 5)
-        }));
-        
-        // Mettre à jour les compteurs
-        this.managersCount = this.allUsers.filter(u => u.role === 'manager').length;
-        this.employeesCount = this.allUsers.filter(u => u.role === 'employee').length;
-        this.adminsCount = this.allUsers.filter(u => u.role === 'admin').length;
-        
-        console.log('Utilisateurs transformés pour affichage:', this.allUsers);
-      },
-      error: (error: any) => {
-        console.error('Erreur lors du chargement des utilisateurs:', error);
-        // En cas d'erreur, utiliser les données locales
-        console.log('Fallback: utilisation des données locales');
-      }
-    });
-  }
-
-  getOnlyEmployees() {
-    return this.allUsers.filter(user => user.role === 'employee');
-  }
-
-  loadMeetingsFromDatabase() {
-    console.log('Début du chargement des réunions depuis la base...');
-    
-    if (!this.currentManager) {
-      console.error('Aucun manager connecté pour charger les réunions');
-      return;
-    }
-
-    this.managerAuthService.getMeetings().subscribe({
-      next: (response: any) => {
-        const meetings = response.data || response;
-        console.log('Réunions chargées depuis la base:', meetings);
-        
-        // Transformer les réunions pour l'affichage
-        this.meetings = meetings.map((meeting: any) => ({
-          id: meeting.id,
-          title: meeting.title,
-          date: meeting.date_time,
-          duration: meeting.duration,
-          location: meeting.location,
-          participants: meeting.participants,
-          type: meeting.type,
-          agenda: meeting.agenda || [],
-          status: meeting.status,
-          notes: meeting.notes || '',
-          color: meeting.type === 'team' ? '#10B981' : meeting.type === 'client' ? '#3B82F6' : meeting.type === 'technical' ? '#F59E0B' : '#8B5CF6'
-        }));
-        
-        // Mettre à jour les réunions à venir
-        this.upcomingMeetings = this.meetings.filter(m => m.status === 'upcoming' || m.status === 'scheduled');
-        
-        console.log('Réunions transformées pour affichage:', this.meetings);
-        console.log('Réunions à venir:', this.upcomingMeetings);
-        
-        // Synchroniser le calendrier après le chargement
-        this.syncCalendarWithMeetings();
-        console.log('Calendrier synchronisé après chargement des réunions');
-      },
-      error: (error: any) => {
-        console.error('Erreur lors du chargement des réunions:', error);
-        console.log('Fallback: utilisation des données locales');
-        // Conserver les données mockées en cas d'erreur
-      }
-    });
-  }
-
-  loadAnalytics(projectId?: number) {
-    if (!this.currentManager) {
-      console.error('Aucun manager connecté pour charger les analytics');
-      return;
-    }
-
-    if (projectId) {
-      // Load project-specific analytics
-      this.analyticsService.getProjectAnalytics(projectId).subscribe({
-        next: (response: any) => {
-          this.analyticsData = response.data;
-          console.log('Analytics du projet chargées:', this.analyticsData);
-        },
-        error: (error: any) => {
-          console.error('Erreur lors du chargement des analytics du projet:', error);
-        }
-      });
-    } else {
-      // Load manager-level analytics
-      this.analyticsService.getManagerAnalytics(this.currentManager.id).subscribe({
-        next: (response: any) => {
-          this.analyticsData = response.data;
-          console.log('Analytics globales chargées:', this.analyticsData);
-        },
-        error: (error: any) => {
-          console.error('Erreur lors du chargement des analytics globales:', error);
-        }
-      });
-    }
-  }
-
-  getGanttProjectName(): string {
-    const id = this.selectedProjectForAnalytics;
-    if (id == null) {
-      return 'Project';
-    }
-    const project = this.recentProjects.find(p => p.id === id);
-    return project?.name ?? 'Project';
-  }
-
-  getProjectStatusLabel(status: string): string {
-    const labels = {
-      'active': 'Actif',
-      'completed': 'Terminé',
-      'paused': 'En pause',
-      'cancelled': 'Annulé'
-    };
-    return labels[status as keyof typeof labels] || status;
-  }
-
-  loadTasksByStatus(status: string) {
-    this.managerAuthService.getTasksByStatus(status).subscribe({
-      next: (response: any) => {
-        const tasks = response.data || response;
-        console.log(`Tâches ${status} chargées:`, tasks);
-        
-        if (tasks.length === 0) {
-          console.log(`Aucune tâche ${status} trouvée dans la base de données`);
-          // Laisser le tableau vide - pas de données mockées
-          console.log(`Tableau ${status} laissé vide`);
-          return;
-        }
-        
-        // Transformer les tâches pour l'affichage
-        const transformedTasks = tasks.map((task: any) => {
-          const assignments = this.parseTaskAssignments(task);
-
-          let assigneeName = 'Non assigné';
-          let assigneeInitials = 'NA';
-          if (assignments.length > 0) {
-            assigneeName = assignments
-              .map((a: any) => a.employee_name || `Employé #${a.employee_id}`)
-              .join(', ');
-            assigneeInitials =
-              assignments.length === 1
-                ? (assignments[0].employee_initials || '?').toString().substring(0, 3)
-                : `${assignments.length}`;
-          } else if (task.assignee_id) {
-            const user = this.allUsers.find((u: any) => u.id === task.assignee_id);
-            if (user) {
-              assigneeName = `${user.prenom} ${user.nom}`;
-              assigneeInitials = assigneeName
-                .split(' ')
-                .map((n: string) => n[0])
-                .join('');
-            }
-          }
-
-          let parsedTags = [];
-          try {
-            if (task.tags) {
-              parsedTags = typeof task.tags === 'string' ? JSON.parse(task.tags) : task.tags;
-            }
-          } catch (e) {
-            console.error('Erreur parsing tags:', e);
-          }
-
-          return {
-            id: task.id,
-            title: task.title,
-            description: task.description,
-            priority: task.priority,
-            status: task.status,
-            project_id: task.project_id ?? null,
-            assignee: assigneeName,
-            assignee_id: task.assignee_id,
-            assignments,
-            assigneeInitials,
-            avatarColor: this.getAvatarColor(task.id),
-            dueDate: task.due_date || new Date().toISOString().split('T')[0],
-            progress: task.progress || 0,
-            tags: parsedTags,
-            submittedAt: task.created_at || new Date().toISOString()
-          };
-        });
-        
-        // Mettre à jour le tableau de tâches principal
-        if (!this.tasks) {
-          this.tasks = [];
-        }
-        
-        // Ajouter les nouvelles tâches ou mettre à jour les existantes
-        transformedTasks.forEach((newTask: Task) => {
-          const existingIndex = this.tasks.findIndex(t => t.id === newTask.id);
-          if (existingIndex >= 0) {
-            this.tasks[existingIndex] = newTask;
-          } else {
-            this.tasks.push(newTask);
-          }
-        });
-        
-        // Mettre à jour les tableaux spécifiques
-        switch(status) {
-          case 'todo':
-            this.todoTasks = transformedTasks;
-            break;
-          case 'in_progress':
-            this.inProgressTasks = transformedTasks;
-            break;
-          case 'done':
-            this.doneTasks = transformedTasks;
-            break;
-        }
-        
-        console.log(`Tâches ${status} transformées:`, transformedTasks);
-        console.log('Total des tâches après chargement:', this.tasks.length);
-      },
-      error: (error: any) => {
-        console.error(`Erreur lors du chargement des tâches ${status}:`, error);
-        // En cas d'erreur, laisser le tableau vide pour ne pas utiliser de données mockées
-        console.log(`Aucune tâche ${status} chargée - tableau laissé vide`);
-      }
-    });
-  }
-  // La méthode loadMockTasksForStatus a été supprimée pour n'utiliser que des données réelles
-
-  getAvatarColor(userId: number): string {
-    const colors = ['purple', 'teal', 'amber', 'rose', 'blue', 'green'];
-    return colors[userId % colors.length];
-  }
-
-  // Formulaire de création de projet
-  newProject = {
-    name: '',
-    description: '',
-    team: '',
-    priority: 'medium',
-    startDate: '',
-    endDate: '',
-    budget: 0
-  };
-
-  // Données pour le dashboard - initialisées dynamiquement
   globalStats = {
     totalEmployees: 0,
     activeProjects: 0,
@@ -522,354 +117,48 @@ export class ManagerDashboardComponent implements OnInit {
   };
 
   recentProjects: DisplayProject[] = [];
-
-  // Les tâches seront chargées depuis la base de données
-  baseTasks: Task[] = [];
-
-  // Les tableaux de tâches seront initialisés dynamiquement
   tasks: Task[] = [];
   todoTasks: Task[] = [];
   inProgressTasks: Task[] = [];
   doneTasks: Task[] = [];
   pendingTasks: Task[] = [];
 
-  // Les utilisateurs seront chargés depuis la base de données
   users: any[] = [];
   allUsers: any[] = [];
   managersCount = 0;
   employeesCount = 0;
   adminsCount = 0;
 
-  // Les réunions seront chargées depuis la base de données
   meetings: any[] = [];
   upcomingMeetings: any[] = [];
-
-  // Les documents seront chargés depuis la base de données
   documents: Document[] = [];
-
-  // Analytics data
   analyticsData: any = null;
   selectedProjectForAnalytics: number | null = null;
 
-  constructor(
-    private managerAuthService: ManagerAuthService,
-    public documentsService: DocumentsService,
-    private router: Router,
-    private analyticsService: AnalyticsService,
-    private taskEnhancedService: TaskEnhancedService,
-    private iaService: IARecommendationService
-  ) {}
+  totalHours = 0;
+  avgHoursPerDay = 0;
+  workedDays = 0;
+  weekDays = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+  calendarDays: CalendarDay[] = [];
+  teamPerformance: any[] = [];
 
-  timesheets = [
-    {
-      id: 1,
-      user: 'Jean Dupont',
-      date: '2024-03-23',
-      entryTime: '09:00',
-      exitTime: '18:00',
-      totalHours: 8,
-      tasks: [
-        { task: 'Développement dashboard', duration: 4 },
-        { task: 'Réunion équipe', duration: 1 },
-        { task: 'Review code', duration: 1 },
-        { task: 'Documentation', duration: 2 }
-      ],
-      status: 'validated',
-      project: 'Dashboard Manager'
-    },
-    {
-      id: 2,
-      user: 'Marie Martin',
-      date: '2024-03-23',
-      entryTime: '08:30',
-      exitTime: '17:30',
-      totalHours: 9,
-      tasks: [
-        { task: 'Formation Angular', duration: 3 },
-        { task: 'API REST', duration: 3 },
-        { task: 'Tests unitaires', duration: 2 },
-        { task: 'Déploiement', duration: 1 }
-      ],
-      status: 'validated',
-      project: 'Formation Angular Avancé'
-    },
-    {
-      id: 3,
-      user: 'Pierre Bernard',
-      date: '2024-03-23',
-      entryTime: '09:00',
-      exitTime: '19:00',
-      totalHours: 10,
-      tasks: [
-        { task: 'Migration Cloud', duration: 6 },
-        { task: 'Tests', duration: 2 },
-        { task: 'Documentation', duration: 2 }
-      ],
-      status: 'validated',
-      project: 'Migration Cloud Infrastructure'
-    }
-  ];
-
-  navItems = [
-    { id: 'dashboard',    label: 'Dashboard',    icon: 'bi-speedometer2',   group: 'principal', badge: null },
-    { id: 'projets',      label: 'Projets',      icon: 'bi-kanban',         group: 'principal', badge: null },
-    { id: 'taches',       label: 'Tâches',       icon: 'bi-check2-square',  group: 'principal', badge: '12' },
-    { id: 'gantt',        label: 'Gantt',        icon: 'bi-calendar3-range',group: 'principal', badge: null },
-    { id: 'utilisateurs', label: 'Utilisateurs', icon: 'bi-people',         group: 'equipe',    badge: null },
-    { id: 'reunions',     label: 'Réunions',     icon: 'bi-camera-video',   group: 'equipe',    badge: '3'  },
-    { id: 'recommandations', label: 'Recommandations IA', icon: 'bi-cpu', group: 'equipe', badge: null },
-    { id: 'simulateur',    label: 'Simulateur Projets', icon: 'bi-diagram-3', group: 'equipe', badge: null },
-    { id: 'planning',      label: 'Planning',        icon: 'bi-calendar-event', group: 'equipe', badge: null },
-    { id: 'analytics',     label: 'Analytics',       icon: 'bi-graph-up', group: 'principal', badge: null },
-    { id: 'documents',  label: 'Documents',  icon: 'bi-folder2-open',   group: 'ressources',badge: null },
-  ];
-
-  topbarTitles: Record<SectionId, { title: string; sub: string }> = {
-    dashboard:    { title: 'Dashboard',      sub: 'Vue d\'ensemble' },
-    projets:      { title: 'Projets',        sub: 'Gestion des projets' },
-    taches:       { title: 'Tâches',         sub: 'Kanban — To Do / In Progress / Done' },
-    gantt:        { title: 'Gantt',          sub: 'Planification des projets' },
-    analytics:    { title: 'Analytics',      sub: 'KPIs et statistiques' },
-    utilisateurs: { title: 'Utilisateurs',   sub: 'Gestion des rôles & permissions' },
-    reunions:     { title: 'Réunions',       sub: 'Planification & notes' },
-    recommandations: { title: 'Recommandations IA', sub: 'IA d\'affectation de tâches' },
-    simulateur:    { title: 'Simulateur Projets', sub: 'Simulation de projets avec IA' },
-    planning:      { title: 'Plannings Sauvegardés', sub: 'Historique des simulations IA' },
-    documents:  { title: 'Documents',      sub: 'Gestion des fichiers' },
+  newProject = {
+    name: '', description: '', team: '', priority: 'medium',
+    startDate: '', endDate: '', budget: 0
   };
 
-  get currentTitle() { return this.topbarTitles[this.activeSection]; }
-  get principalItems() { return this.navItems.filter(n => n.group === 'principal'); }
-  get equipeItems()    { return this.navItems.filter(n => n.group === 'equipe'); }
-  get ressourcesItems(){ return this.navItems.filter(n => n.group === 'ressources'); }
+  newTask = {
+    title: '', description: '', priority: 'medium',
+    assignee_id: null as number | null,
+    assignee_ids: [] as number[],
+    project_id: null,
+    due_date: '', estimated_hours: 0, tags: [] as string[]
+  };
 
-  navigate(id: string) {
-    this.activeSection = id as SectionId;
+  newUser = { nom: '', prenom: '', email: '', password: '', role: '', telephone: '' };
+  userToEdit: any = {};
 
-    // Load analytics when navigating to analytics section
-    if (id === 'analytics') {
-      this.loadAnalytics();
-    }
-  }
-
-  // Helper methods for template validation
-  isCreateProjectDisabled(): boolean {
-    return this.loading || !this.newProject.name || !this.newProject.team;
-  }
-
-  isAddDocumentDisabled(): boolean {
-    return this.loading || !this.newDocData.title || !this.selectedFile || !this.newDocData.employeeId;
-  }
-
-  // Helper methods for analytics data
-  getGlobalTotalProjects(): number {
-    return this.analyticsData?.globalStats?.totalProjects ?? 0;
-  }
-
-  getGlobalCompletedTasks(): number {
-    return this.analyticsData?.globalStats?.completedTasks ?? 0;
-  }
-
-  getGlobalDelayedTasks(): number {
-    return this.analyticsData?.globalStats?.delayedTasks ?? 0;
-  }
-
-  getGlobalActualHours(): number {
-    return this.analyticsData?.globalStats?.totalActualHours ?? 0;
-  }
-
-  getProjectTotalTasks(): number {
-    return this.analyticsData?.projectStats?.total_tasks ?? 0;
-  }
-
-  getProjectCompletionPercentage(): number {
-    return this.analyticsData?.kpis?.completionPercentage ?? 0;
-  }
-
-  getProjectEstimatedHours(): number {
-    return this.analyticsData?.projectStats?.total_estimated_hours ?? 0;
-  }
-
-  getWorkloadDistributionLength(): number {
-    return this.analyticsData?.workloadDistribution?.length ?? 0;
-  }
-
-  @HostListener('window:scroll', [])
-  onScroll() { this.isScrolled = window.scrollY > 40; }
-
-  // Helper method for event propagation
-  stopPropagation(event: Event) {
-    event.stopPropagation();
-  }
-
-  goToGantt() {
-    // Naviguer vers la page Gantt
-    window.location.href = '/gantt';
-  }
-
-  getAverageProgress(): number {
-    if (this.recentProjects.length === 0) return 0;
-    
-    const totalProgress = this.recentProjects.reduce((sum, project) => sum + (project.progress || 0), 0);
-    return Math.round(totalProgress / this.recentProjects.length);
-  }
-
-  // Méthodes pour le dashboard
-  getStatusColor(status: string): string {
-    const colors = {
-      'active': '#10B981',
-      'completed': '#3B82F6',
-      'pending': '#F59E0B'
-    };
-    return colors[status as keyof typeof colors] || '#6B7280';
-  }
-
-  getPriorityColor(priority: string): string {
-    const colors = {
-      'low': '#10B981',
-      'medium': '#F59E0B',
-      'high': '#EF4444'
-    };
-    return colors[priority as keyof typeof colors] || '#6B7280';
-  }
-
-  getTeamSize(teamName: string): number {
-    switch(teamName) {
-      case 'Équipe A': return 8;
-      case 'Équipe B': return 12;
-      case 'Équipe C': return 6;
-      default: return 5;
-    }
-  }
-
-  getStatusLabel(status: string): string {
-    const labels = {
-      'active': 'Actif',
-      'completed': 'Terminé',
-      'paused': 'En pause',
-      'cancelled': 'Annulé'
-    };
-    return labels[status as keyof typeof labels] || status;
-  }
-
-  getPriorityLabel(priority: string): string {
-    const labels = {
-      'low': 'Basse',
-      'medium': 'Moyenne',
-      'high': 'Haute'
-    };
-    return labels[priority as keyof typeof labels] || priority;
-  }
-
-  getRoleIcon(role: string): string {
-    const icons = {
-      'manager': 'bi-person-badge',
-      'admin': 'bi-shield-check',
-      'employee': 'bi-person'
-    };
-    return icons[role as keyof typeof icons] || 'bi-person';
-  }
-
-  getDocumentIcon(type: string): string {
-    const icons = {
-      'pdf': 'bi-file-pdf',
-      'docx': 'bi-file-word',
-      'xlsx': 'bi-file-excel',
-      'pptx': 'bi-file-ppt',
-      'markdown': 'bi-file-code',
-      'txt': 'bi-file-text'
-    };
-    return icons[type as keyof typeof icons] || 'bi-file';
-  }
-
-  getEfficiencyColor(efficiency: number): string {
-    if (efficiency >= 80) return '#10B981';
-    if (efficiency >= 60) return '#F59E0B';
-    return '#EF4444';
-  }
-
-  approveTask(taskId: number) {
-    console.log('Approuver tâche:', taskId);
-    
-    this.managerAuthService.approveTask(taskId).subscribe({
-      next: (response: any) => {
-        console.log('Tâche approuvée:', response);
-        alert('Tâche approuvée avec succès');
-        // Recharger les tâches
-        this.loadTasksFromDatabase();
-      },
-      error: (error: any) => {
-        console.error('Erreur lors de l\'approbation de la tâche:', error);
-        alert('Erreur lors de l\'approbation de la tâche');
-      }
-    });
-  }
-
-  rejectTask(taskId: number) {
-    console.log('Rejeter tâche:', taskId);
-    
-    this.managerAuthService.rejectTask(taskId).subscribe({
-      next: (response: any) => {
-        console.log('Tâche rejetée:', response);
-        alert('Tâche rejetée avec succès');
-        // Recharger les tâches
-        this.loadTasksFromDatabase();
-      },
-      error: (error: any) => {
-        console.error('Erreur lors du rejet de la tâche:', error);
-        alert('Erreur lors du rejet de la tâche');
-      }
-    });
-  }
-
-  // Méthodes pour le drag and drop
-  draggedTask: any = null;
-  draggedOverColumn: string = '';
-
-  onDragStart(task: any, event: DragEvent) {
-    this.draggedTask = task;
-    event.dataTransfer!.effectAllowed = 'move';
-    console.log('Drag started for task:', task.title);
-  }
-
-  onDragEnd(event: DragEvent) {
-    this.draggedTask = null;
-    this.draggedOverColumn = '';
-    console.log('Drag ended');
-  }
-
-  onDragOver(event: DragEvent) {
-    event.preventDefault();
-    event.dataTransfer!.dropEffect = 'move';
-  }
-
-  onDragEnter(event: DragEvent) {
-    event.preventDefault();
-  }
-
-  onDragLeave(event: DragEvent) {
-    // Gérer le visuel si nécessaire
-  }
-
-  onDrop(event: DragEvent, targetStatus: string) {
-    event.preventDefault();
-    
-    if (!this.draggedTask) {
-      return;
-    }
-
-    console.log('Dropping task:', this.draggedTask.title, 'to column:', targetStatus);
-
-    // Si on déplace vers la même colonne, ne rien faire
-    if (this.draggedTask.status === targetStatus) {
-      return;
-    }
-
-    // Mettre à jour le statut de la tâche
-    this.updateTaskStatus(this.draggedTask.id, targetStatus);
-  }
-
-  // Formulaire d'édition de tâche
+  showCreateTaskModal = false;
   taskToEdit: any = {};
   showEditTaskModal = false;
   editAddEmployeeId: number | null = null;
@@ -877,18 +166,605 @@ export class ManagerDashboardComponent implements OnInit {
   projectTaskDependencies: { task_id: number; depends_on_task_id: number }[] = [];
   editDependsOnTaskId: number | null = null;
   editDependencyType: 'finish_to_start' | 'start_to_start' | 'finish_to_finish' = 'finish_to_start';
-  readonly dependencyTypeChoices: { value: 'finish_to_start' | 'start_to_start' | 'finish_to_finish'; label: string }[] = [
-    { value: 'finish_to_start', label: 'Fin → Début (FS)' },
-    { value: 'start_to_start', label: 'Début → Début (SS)' },
-    { value: 'finish_to_finish', label: 'Fin → Fin (FF)' }
+  readonly dependencyTypeChoices = [
+    { value: 'finish_to_start' as const, label: 'Fin → Début (FS)' },
+    { value: 'start_to_start' as const, label: 'Début → Début (SS)' },
+    { value: 'finish_to_finish' as const, label: 'Fin → Fin (FF)' }
   ];
 
-  editTask(task: any) {
-    console.log('Modification de la tâche:', task);
-    this.taskToEdit = { ...task };
-    if (!this.taskToEdit.assignments) {
-      this.taskToEdit.assignments = [];
+  draggedTask: any = null;
+  draggedOverColumn = '';
+  selectedTaskIds: number[] = [];
+
+  navItems = [
+    { id: 'dashboard',       label: 'Dashboard',          icon: 'bi-speedometer2',    group: 'principal',   badgeCount: 0 },
+    { id: 'projets',         label: 'Projets',            icon: 'bi-kanban',           group: 'principal',   badgeCount: 0 },
+    { id: 'taches',          label: 'Tâches',             icon: 'bi-check2-square',    group: 'principal',   badgeCount: 0 },
+    { id: 'gantt',           label: 'Gantt',              icon: 'bi-calendar3-range',  group: 'principal',   badgeCount: 0 },
+    { id: 'utilisateurs',    label: 'Utilisateurs',       icon: 'bi-people',           group: 'equipe',      badgeCount: 0 },
+    { id: 'reunions',        label: 'Réunions',           icon: 'bi-camera-video',     group: 'equipe',      badgeCount: 0 },
+    { id: 'recommandations', label: 'Recommandations IA', icon: 'bi-cpu',              group: 'equipe',      badgeCount: 0 },
+    { id: 'simulateur',      label: 'Simulateur Projets', icon: 'bi-diagram-3',        group: 'equipe',      badgeCount: 0 },
+    { id: 'planning',        label: 'Planning',           icon: 'bi-calendar-event',   group: 'equipe',      badgeCount: 0 },
+    { id: 'analytics',       label: 'Analytics',          icon: 'bi-graph-up',         group: 'principal',   badgeCount: 0 },
+    { id: 'documents',       label: 'Documents',          icon: 'bi-folder2-open',     group: 'ressources',  badgeCount: 0 },
+    { id: 'presence',        label: 'Présence',            icon: 'bi-fingerprint',       group: 'equipe',      badgeCount: 0 },
+  ];
+
+  topbarTitles: Record<SectionId, { title: string; sub: string }> = {
+    dashboard:       { title: 'Dashboard',            sub: 'Vue d\'ensemble' },
+    projets:         { title: 'Projets',              sub: 'Gestion des projets' },
+    taches:          { title: 'Tâches',               sub: 'Kanban — To Do / In Progress / Done' },
+    gantt:           { title: 'Gantt',                sub: 'Planification des projets' },
+    analytics:       { title: 'Analytics',            sub: 'KPIs et statistiques' },
+    utilisateurs:    { title: 'Utilisateurs',         sub: 'Gestion des rôles & permissions' },
+    reunions:        { title: 'Réunions',             sub: 'Planification & notes' },
+    recommandations: { title: 'Recommandations IA',   sub: 'IA d\'affectation de tâches' },
+    simulateur:      { title: 'Simulateur Projets',   sub: 'Simulation de projets avec IA' },
+    planning:        { title: 'Plannings Sauvegardés',sub: 'Historique des simulations IA' },
+    documents:       { title: 'Documents',            sub: 'Gestion des fichiers' },
+    presence:        { title: 'Présence & Congés',    sub: 'Pointage équipe, retards, validation' },
+  };
+
+  get currentTitle() { return this.topbarTitles[this.activeSection]; }
+  get principalItems() { return this.navItems.filter(n => n.group === 'principal'); }
+  get equipeItems()    { return this.navItems.filter(n => n.group === 'equipe'); }
+  get ressourcesItems(){ return this.navItems.filter(n => n.group === 'ressources'); }
+
+  constructor(
+    private managerAuthService: ManagerAuthService,
+    public documentsService: DocumentsService,
+    private router: Router,
+    private analyticsService: AnalyticsService,
+    private taskEnhancedService: TaskEnhancedService,
+    private iaService: IARecommendationService,
+    private toast: ToastService
+  ) {}
+
+  ngOnInit(): void {
+    this.currentManager = this.managerAuthService.currentManagerValue;
+
+    if (!this.currentManager) {
+      this.router.navigate(['/manager-login']);
+      return;
     }
+
+    this.managerAuthService.currentManager
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(manager => {
+        this.currentManager = manager;
+        if (!manager) this.router.navigate(['/manager-login']);
+      });
+
+    this.loadAllData();
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  private loadAllData(): void {
+    forkJoin({
+      projects: this.managerAuthService.getManagerProjects(),
+      users: this.managerAuthService.getAllUsers(),
+      meetings: this.managerAuthService.getMeetings(),
+      todoTasks: this.managerAuthService.getTasksByStatus('todo'),
+      inProgressTasks: this.managerAuthService.getTasksByStatus('in_progress'),
+      doneTasks: this.managerAuthService.getTasksByStatus('done')
+    })
+    .pipe(takeUntil(this.destroy$))
+    .subscribe({
+      next: ({ projects, users, meetings, todoTasks, inProgressTasks, doneTasks }) => {
+        this.processProjects(projects);
+        this.processUsers(users);
+        this.processMeetings(meetings);
+        this.processAllTasks(todoTasks, inProgressTasks, doneTasks);
+        this.calculateStats();
+        this.syncCalendarWithMeetings();
+      },
+      error: (err) => {
+        if (err.status !== 401) {
+          this.toast.error('Erreur lors du chargement des données.');
+        }
+      }
+    });
+
+    this.loadDocuments();
+    this.loadPlannings();
+  }
+
+  private processProjects(response: any): void {
+    const projects = response.data || response;
+    this.recentProjects = projects.map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      description: p.description || '',
+      progress: p.progress,
+      team: p.team,
+      deadline: p.deadline,
+      status: p.status,
+      startDate: p.startDate,
+      endDate: p.endDate,
+      budget: p.budget,
+      priority: p.priority
+    }));
+  }
+
+  private processUsers(response: any): void {
+    const users = response.data || response;
+    this.allUsers = users.map((user: any) => ({
+      id: user.id,
+      nom: user.nom,
+      prenom: user.prenom,
+      email: user.email,
+      role: user.role,
+      telephone: user.telephone,
+      avatarColor: this.getAvatarColor(user.id),
+      status: user.actif !== false ? 'active' : 'inactive',
+      date_creation: user.date_creation || user.created_at,
+      name: `${user.prenom} ${user.nom}`,
+      initials: `${(user.prenom || '')[0]}${(user.nom || '')[0]}`.toUpperCase(),
+      phone: user.telephone,
+      createdAt: user.date_creation || user.created_at,
+      active: user.actif !== false
+    }));
+    this.managersCount = this.allUsers.filter(u => u.role === 'manager').length;
+    this.employeesCount = this.allUsers.filter(u => u.role === 'employee').length;
+    this.adminsCount = this.allUsers.filter(u => u.role === 'admin').length;
+  }
+
+  private processMeetings(response: any): void {
+    const meetings = response.data || response;
+    this.meetings = meetings.map((m: any) => ({
+      id: m.id,
+      title: m.title,
+      date: m.date_time,
+      duration: m.duration,
+      location: m.location,
+      participants: m.participants,
+      type: m.type,
+      agenda: m.agenda || [],
+      status: m.status,
+      notes: m.notes || '',
+      color: this.getMeetingTypeColor(m.type)
+    }));
+    this.upcomingMeetings = this.meetings.filter(m => m.status === 'upcoming' || m.status === 'scheduled');
+  }
+
+  private processAllTasks(todoRes: any, inProgressRes: any, doneRes: any): void {
+    const mapTasks = (res: any) => {
+      const tasks = res.data || res;
+      return tasks.map((task: any) => this.transformTask(task));
+    };
+
+    this.todoTasks = mapTasks(todoRes);
+    this.inProgressTasks = mapTasks(inProgressRes);
+    this.doneTasks = mapTasks(doneRes);
+    this.tasks = [...this.todoTasks, ...this.inProgressTasks, ...this.doneTasks];
+  }
+
+  private transformTask(task: any): Task {
+    const assignments = this.parseTaskAssignments(task);
+    let assigneeName = 'Non assigné';
+    let assigneeInitials = 'NA';
+    if (assignments.length > 0) {
+      assigneeName = assignments.map((a: any) => a.employee_name || `Employé #${a.employee_id}`).join(', ');
+      assigneeInitials = assignments.length === 1
+        ? (assignments[0].employee_initials || '?').toString().substring(0, 3)
+        : `${assignments.length}`;
+    } else if (task.assignee_id) {
+      const user = this.allUsers.find((u: any) => u.id === task.assignee_id);
+      if (user) {
+        assigneeName = `${user.prenom} ${user.nom}`;
+        assigneeInitials = `${(user.prenom || '')[0]}${(user.nom || '')[0]}`.toUpperCase();
+      }
+    }
+
+    let parsedTags: string[] = [];
+    try {
+      if (task.tags) parsedTags = typeof task.tags === 'string' ? JSON.parse(task.tags) : task.tags;
+    } catch {}
+
+    return {
+      id: task.id,
+      title: task.title,
+      description: task.description,
+      priority: task.priority,
+      status: task.status,
+      project_id: task.project_id ?? null,
+      assignee: assigneeName,
+      assignee_id: task.assignee_id,
+      assignments,
+      assigneeInitials,
+      avatarColor: this.getAvatarColor(task.id),
+      dueDate: task.due_date || new Date().toISOString().split('T')[0],
+      progress: task.progress || 0,
+      tags: parsedTags,
+      submittedAt: task.created_at || new Date().toISOString()
+    };
+  }
+
+  loadProjectsFromDatabase(): void {
+    if (!this.currentManager) return;
+    this.managerAuthService.getManagerProjects()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response: any) => this.processProjects(response),
+        error: () => this.toast.error('Erreur lors du chargement des projets.')
+      });
+  }
+
+  loadTasksFromDatabase(): void {
+    if (!this.currentManager) return;
+    forkJoin({
+      todo: this.managerAuthService.getTasksByStatus('todo'),
+      inProgress: this.managerAuthService.getTasksByStatus('in_progress'),
+      done: this.managerAuthService.getTasksByStatus('done')
+    })
+    .pipe(takeUntil(this.destroy$))
+    .subscribe({
+      next: ({ todo, inProgress, done }) => {
+        this.processAllTasks(todo, inProgress, done);
+        this.calculateStats();
+        this.updateNavBadges();
+      },
+      error: () => this.toast.error('Erreur lors du chargement des tâches.')
+    });
+  }
+
+  loadUsersFromDatabase(): void {
+    if (!this.currentManager) return;
+    this.managerAuthService.getAllUsers()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response: any) => this.processUsers(response),
+        error: () => this.toast.error('Erreur lors du chargement des utilisateurs.')
+      });
+  }
+
+  loadMeetingsFromDatabase(): void {
+    if (!this.currentManager) return;
+    this.managerAuthService.getMeetings()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response: any) => {
+          this.processMeetings(response);
+          this.syncCalendarWithMeetings();
+        },
+        error: () => this.toast.error('Erreur lors du chargement des réunions.')
+      });
+  }
+
+  loadAnalytics(projectId?: number): void {
+    if (!this.currentManager) return;
+    const obs$ = projectId
+      ? this.analyticsService.getProjectAnalytics(projectId)
+      : this.analyticsService.getManagerAnalytics(this.currentManager.id);
+
+    obs$.pipe(takeUntil(this.destroy$)).subscribe({
+      next: (response: any) => { this.analyticsData = response.data; },
+      error: () => this.toast.error('Erreur lors du chargement des analytics.')
+    });
+  }
+
+  private updateNavBadges(): void {
+    const todoCount = this.todoTasks.length;
+    const meetingCount = this.upcomingMeetings.length;
+    const pendingApprovals = this.tasks.filter(t => t.status === 'done').length;
+
+    this.navItems = this.navItems.map(item => {
+      if (item.id === 'taches') return { ...item, badgeCount: todoCount };
+      if (item.id === 'reunions') return { ...item, badgeCount: meetingCount };
+      if (item.id === 'dashboard') return { ...item, badgeCount: pendingApprovals };
+      return item;
+    });
+  }
+
+  navigate(id: string): void {
+    this.activeSection = id as SectionId;
+    if (id === 'analytics') this.loadAnalytics();
+  }
+
+  getGanttProjectName(): string {
+    const project = this.recentProjects.find(p => p.id === this.selectedProjectForAnalytics);
+    return project?.name ?? 'Project';
+  }
+
+  getAvatarColor(userId: number): string {
+    const colors = ['purple', 'teal', 'amber', 'rose', 'blue', 'green'];
+    return colors[userId % colors.length];
+  }
+
+  getAverageProgress(): number {
+    if (this.recentProjects.length === 0) return 0;
+    const total = this.recentProjects.reduce((sum, p) => sum + (p.progress || 0), 0);
+    return Math.round(total / this.recentProjects.length);
+  }
+
+  calculateStats(): void {
+    this.globalStats.totalEmployees = this.allUsers.length;
+    this.globalStats.activeProjects = this.recentProjects.filter(p => p.status === 'active').length;
+    this.globalStats.completedTasks = this.doneTasks.length;
+    this.globalStats.pendingApprovals = this.tasks.filter(t => t.status === 'done').length;
+
+    this.pendingTasks = this.tasks.filter(t => t.status === 'todo' || t.status === 'in_progress');
+
+    this.teamPerformance = this.allUsers.map(user => {
+      const userTasks = this.tasks.filter(task =>
+        task.assignments?.some((a: any) => a.employee_id === user.id) ||
+        task.assignee_id === user.id
+      );
+      const completedCount = userTasks.filter(t => t.status === 'done').length;
+      const ongoingCount = userTasks.filter(t => t.status === 'in_progress').length;
+      const efficiency = userTasks.length > 0 ? Math.round((completedCount / userTasks.length) * 100) : 0;
+      return {
+        id: user.id,
+        name: `${user.prenom} ${user.nom}`,
+        completedTasks: completedCount,
+        ongoingTasks: ongoingCount,
+        efficiency,
+        avatarColor: user.avatarColor
+      };
+    });
+
+    this.updateNavBadges();
+  }
+
+  syncCalendarWithMeetings(): void {
+    const currentYear = this.currentCalendarDate.getFullYear();
+    const currentMonth = this.currentCalendarDate.getMonth();
+    const monthNames = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+    this.calendarMonth = monthNames[currentMonth];
+    this.calendarYear = currentYear;
+
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    this.calendarDays = Array.from({ length: daysInMonth }, (_, i) => {
+      const dayDate = new Date(currentYear, currentMonth, i + 1);
+      return { number: i + 1, isToday: this.isToday(dayDate), hasMeeting: false, meetings: [] };
+    });
+
+    this.meetings.forEach(meeting => {
+      const meetingDate = new Date(meeting.date);
+      if (meetingDate.getMonth() === currentMonth && meetingDate.getFullYear() === currentYear) {
+        const calDay = this.calendarDays.find(d => d.number === meetingDate.getDate());
+        if (calDay) {
+          calDay.hasMeeting = true;
+          calDay.meetings.push({
+            color: meeting.color || this.getMeetingTypeColor(meeting.type),
+            title: meeting.title,
+            time: meetingDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+          });
+        }
+      }
+    });
+
+    this.calendarDays.forEach(d => {
+      d.meetings.sort((a, b) => a.time.localeCompare(b.time));
+    });
+  }
+
+  isToday(date: Date): boolean {
+    const today = new Date();
+    return date.getDate() === today.getDate() &&
+           date.getMonth() === today.getMonth() &&
+           date.getFullYear() === today.getFullYear();
+  }
+
+  previousMonth(): void {
+    this.currentCalendarDate = new Date(this.currentCalendarDate.getFullYear(), this.currentCalendarDate.getMonth() - 1, 1);
+    this.syncCalendarWithMeetings();
+  }
+
+  nextMonth(): void {
+    this.currentCalendarDate = new Date(this.currentCalendarDate.getFullYear(), this.currentCalendarDate.getMonth() + 1, 1);
+    this.syncCalendarWithMeetings();
+  }
+
+  goToCurrentMonth(): void {
+    this.currentCalendarDate = new Date();
+    this.syncCalendarWithMeetings();
+  }
+
+  getDayMeetingsTooltip(day: CalendarDay): string {
+    if (!day.meetings?.length) return '';
+    return `${day.meetings.length} réunion(s):\n` + day.meetings.map(m => `• ${m.time} - ${m.title}`).join('\n');
+  }
+
+  showDayMeetingsModalFunc(day: CalendarDay): void {
+    this.selectedDay = day;
+    this.selectedDayMeetings = day.meetings.map(m =>
+      this.meetings.find(fm => fm.title === m.title && new Date(fm.date).getDate() === day.number) || m
+    );
+    this.showDayMeetingsModal = true;
+  }
+
+  closeDayMeetingsModal(): void {
+    this.showDayMeetingsModal = false;
+    this.selectedDay = null;
+    this.selectedDayMeetings = [];
+  }
+
+  openCreateMeetingModalForDay(): void {
+    if (this.selectedDay) {
+      const dayDate = new Date(this.currentCalendarDate.getFullYear(), this.currentCalendarDate.getMonth(), this.selectedDay.number, 9, 0);
+      this.newMeeting.date = dayDate.toISOString().slice(0, 16);
+    }
+    this.closeDayMeetingsModal();
+    this.openCreateMeetingModal();
+  }
+
+  viewMeetingFromDay(meeting: any): void { this.closeDayMeetingsModal(); this.viewMeeting(meeting); }
+  editMeetingFromDay(meeting: any): void { this.closeDayMeetingsModal(); this.editMeeting(meeting); }
+
+  // ─── PROJETS ──────────────────────────────────────────────────────────────
+
+  isCreateProjectDisabled(): boolean {
+    return this.loading || !this.newProject.name || !this.newProject.team;
+  }
+
+  openCreateProjectModal(): void { this.showCreateProjectModal = true; }
+  closeCreateProjectModal(): void { this.showCreateProjectModal = false; this.resetProjectForm(); }
+  closeViewProjectModal(): void { this.showViewProjectModal = false; this.selectedProject = null; }
+
+  closeEditProjectModal(): void {
+    this.showEditProjectModal = false;
+    this.selectedProject = null;
+    this.projectToEdit = { name: '', description: '', team: '', priority: 'medium', startDate: '', endDate: '', budget: 0 };
+  }
+
+  resetProjectForm(): void {
+    this.newProject = { name: '', description: '', team: '', priority: 'medium', startDate: '', endDate: '', budget: 0 };
+  }
+
+  viewProject(project: any): void { this.selectedProject = project; this.showViewProjectModal = true; }
+
+  editProject(project: any): void {
+    this.selectedProject = project;
+    this.projectToEdit = {
+      name: project.name, description: project.description, team: project.team,
+      priority: project.priority, startDate: project.startDate,
+      endDate: project.endDate, budget: project.budget
+    };
+    this.showEditProjectModal = true;
+  }
+
+  createProject(): void {
+    if (!this.newProject.name || !this.newProject.team) {
+      this.toast.warning('Champs obligatoires manquants : nom et équipe sont requis.');
+      return;
+    }
+    this.loading = true;
+    this.managerAuthService.createProject({
+      name: this.newProject.name,
+      description: this.newProject.description,
+      team: this.newProject.team,
+      priority: this.newProject.priority,
+      startDate: this.newProject.startDate,
+      endDate: this.newProject.endDate,
+      budget: this.newProject.budget
+    })
+    .pipe(takeUntil(this.destroy$))
+    .subscribe({
+      next: () => {
+        this.loading = false;
+        this.closeCreateProjectModal();
+        this.toast.success('Projet créé avec succès.');
+        this.loadProjectsFromDatabase();
+      },
+      error: () => {
+        this.loading = false;
+        this.toast.error('Erreur lors de la création du projet.');
+      }
+    });
+  }
+
+  updateProject(): void {
+    if (!this.projectToEdit.name || !this.projectToEdit.team) {
+      this.toast.warning('Veuillez remplir les champs obligatoires.');
+      return;
+    }
+    this.loading = true;
+    this.managerAuthService.updateProject(this.selectedProject.id, {
+      name: this.projectToEdit.name,
+      description: this.projectToEdit.description || null,
+      team: this.projectToEdit.team,
+      priority: this.projectToEdit.priority || 'medium',
+      startDate: this.projectToEdit.startDate || null,
+      endDate: this.projectToEdit.endDate || null,
+      budget: this.projectToEdit.budget || null,
+      deadline: this.projectToEdit.endDate || null,
+      status: 'active',
+      progress: 0
+    })
+    .pipe(takeUntil(this.destroy$))
+    .subscribe({
+      next: () => {
+        this.loading = false;
+        this.closeEditProjectModal();
+        this.toast.success('Projet mis à jour avec succès.');
+        this.loadProjectsFromDatabase();
+      },
+      error: () => {
+        this.loading = false;
+        this.toast.error('Erreur lors de la mise à jour du projet.');
+      }
+    });
+  }
+
+  deleteProject(project: any): void {
+    if (!confirm(`Supprimer le projet "${project.name}" ? Toutes les tâches associées seront supprimées.`)) return;
+    this.managerAuthService.deleteProject(project.id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.toast.success('Projet supprimé avec succès.');
+          this.loadProjectsFromDatabase();
+          this.loadTasksFromDatabase();
+          if (this.selectedProjectForAnalytics === project.id) this.selectedProjectForAnalytics = null;
+        },
+        error: () => this.toast.error('Erreur lors de la suppression du projet.')
+      });
+  }
+
+  // ─── TÂCHES ───────────────────────────────────────────────────────────────
+
+  openCreateTaskModal(): void { this.showCreateTaskModal = true; }
+  closeCreateTaskModal(): void { this.showCreateTaskModal = false; this.resetTaskForm(); }
+
+  resetTaskForm(): void {
+    this.newTask = { title: '', description: '', priority: 'medium', assignee_id: null, assignee_ids: [], project_id: null, due_date: '', estimated_hours: 0, tags: [] };
+  }
+
+  isAddDocumentDisabled(): boolean {
+    return this.loading || !this.newDocData.title || !this.selectedFile || !this.newDocData.employeeId;
+  }
+
+  toggleNewTaskAssignee(employeeId: number): void {
+    if (!this.newTask.assignee_ids) this.newTask.assignee_ids = [];
+    const idx = this.newTask.assignee_ids.indexOf(employeeId);
+    if (idx >= 0) this.newTask.assignee_ids.splice(idx, 1);
+    else this.newTask.assignee_ids.push(employeeId);
+  }
+
+  isNewTaskAssigneeSelected(employeeId: number): boolean {
+    return !!(this.newTask.assignee_ids?.includes(employeeId));
+  }
+
+  submitTask(): void {
+    if (!this.newTask.title) {
+      this.toast.warning('Le titre de la tâche est obligatoire.');
+      return;
+    }
+    const taskData = {
+      ...this.newTask,
+      creator_id: this.currentManager?.id,
+      assignee_ids: this.newTask.assignee_ids?.length ? [...this.newTask.assignee_ids] : (this.newTask.assignee_id ? [this.newTask.assignee_id] : []),
+      assignee_id: this.newTask.assignee_ids?.length ? this.newTask.assignee_ids[0] : (this.newTask.assignee_id || null),
+      project_id: this.newTask.project_id || null,
+      due_date: this.newTask.due_date || null,
+      estimated_hours: this.newTask.estimated_hours || null,
+      tags: this.newTask.tags.length > 0 ? JSON.stringify(this.newTask.tags) : null
+    };
+    this.managerAuthService.createTask(taskData)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.toast.success('Tâche créée avec succès.');
+          this.closeCreateTaskModal();
+          this.loadTasksFromDatabase();
+        },
+        error: (err) => {
+          if (err.status !== 401 && err.status !== 403) {
+            this.toast.error('Erreur lors de la création de la tâche.');
+          }
+        }
+      });
+  }
+
+  editTask(task: any): void {
+    this.taskToEdit = { ...task };
+    if (!this.taskToEdit.assignments) this.taskToEdit.assignments = [];
     if (this.taskToEdit.assignments.length === 0 && this.taskToEdit.assignee_id) {
       const u = this.allUsers.find((x: any) => x.id === this.taskToEdit.assignee_id);
       if (u) {
@@ -910,7 +786,7 @@ export class ManagerDashboardComponent implements OnInit {
     this.refreshProjectTaskDependencies();
   }
 
-  closeEditTaskModal() {
+  closeEditTaskModal(): void {
     this.showEditTaskModal = false;
     this.taskToEdit = {};
     this.editAddEmployeeId = null;
@@ -918,33 +794,26 @@ export class ManagerDashboardComponent implements OnInit {
     this.editDependsOnTaskId = null;
   }
 
-  refreshTaskEditDependencies() {
+  refreshTaskEditDependencies(): void {
     const id = this.taskToEdit?.id;
     if (!id) return;
-    this.taskEnhancedService.getTaskDependencies(id).subscribe({
-      next: (res: any) => {
-        this.taskEditDependencies = Array.isArray(res?.data) ? res.data : [];
-      },
-      error: () => {
-        this.taskEditDependencies = [];
-      }
-    });
+    this.taskEnhancedService.getTaskDependencies(id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (res: any) => { this.taskEditDependencies = Array.isArray(res?.data) ? res.data : []; },
+        error: () => { this.taskEditDependencies = []; }
+      });
   }
 
-  refreshProjectTaskDependencies() {
+  refreshProjectTaskDependencies(): void {
     const pid = this.taskToEdit?.project_id;
-    if (pid == null) {
-      this.projectTaskDependencies = [];
-      return;
-    }
-    this.taskEnhancedService.getProjectTaskDependencies(pid).subscribe({
-      next: (res: any) => {
-        this.projectTaskDependencies = Array.isArray(res?.data) ? res.data : [];
-      },
-      error: () => {
-        this.projectTaskDependencies = [];
-      }
-    });
+    if (pid == null) { this.projectTaskDependencies = []; return; }
+    this.taskEnhancedService.getProjectTaskDependencies(pid)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (res: any) => { this.projectTaskDependencies = Array.isArray(res?.data) ? res.data : []; },
+        error: () => { this.projectTaskDependencies = []; }
+      });
   }
 
   getPredecessorCandidatesForEdit(): Task[] {
@@ -952,12 +821,10 @@ export class ManagerDashboardComponent implements OnInit {
     const selfId = this.taskToEdit?.id;
     if (pid == null || !this.tasks?.length) return [];
 
-    const blocked = new Set(
-      (this.taskEditDependencies || []).map((d: any) => Number(d.depends_on_task_id))
-    );
-
+    const blocked = new Set((this.taskEditDependencies || []).map((d: any) => Number(d.depends_on_task_id)));
     const forbidden = new Set<number>();
     const adjacency = new Map<number, number[]>();
+
     for (const dep of this.projectTaskDependencies) {
       const source = Number(dep.depends_on_task_id);
       const target = Number(dep.task_id);
@@ -968,8 +835,7 @@ export class ManagerDashboardComponent implements OnInit {
     const queue = [Number(selfId)];
     while (queue.length) {
       const current = queue.shift()!;
-      const nextTasks = adjacency.get(current) || [];
-      for (const next of nextTasks) {
+      for (const next of adjacency.get(current) || []) {
         if (!forbidden.has(next) && next !== Number(selfId)) {
           forbidden.add(next);
           queue.push(next);
@@ -977,84 +843,67 @@ export class ManagerDashboardComponent implements OnInit {
       }
     }
 
-    return this.tasks.filter(
-      (t) =>
-        t.id !== selfId &&
-        t.project_id != null &&
-        Number(t.project_id) === Number(pid) &&
-        !blocked.has(t.id) &&
-        !forbidden.has(t.id)
+    return this.tasks.filter(t =>
+      t.id !== selfId &&
+      t.project_id != null &&
+      Number(t.project_id) === Number(pid) &&
+      !blocked.has(t.id) &&
+      !forbidden.has(t.id)
     );
   }
 
-  addDependencyFromEditModal() {
+  addDependencyFromEditModal(): void {
     const pred = this.editDependsOnTaskId;
     const tid = this.taskToEdit?.id;
-    if (!pred || !tid) {
-      alert('Choisissez une tâche prédécesseur.');
-      return;
-    }
-    if (Number(pred) === Number(tid)) {
-      alert('Une tâche ne peut pas dépendre d’elle-même.');
-      return;
-    }
-    this.taskEnhancedService.addTaskDependency(tid, pred, this.editDependencyType, 0).subscribe({
-      next: () => {
-        this.editDependsOnTaskId = null;
-        this.refreshTaskEditDependencies();
-        this.loadTasksFromDatabase();
-      },
-      error: (err: any) => {
-        const msg =
-          err?.error?.message ||
-          (err?.status === 409 ? 'Cette dépendance existe déjà.' : 'Impossible d’ajouter la dépendance.');
-        alert(msg);
-      }
-    });
+    if (!pred || !tid) { this.toast.warning('Choisissez une tâche prédécesseur.'); return; }
+    if (Number(pred) === Number(tid)) { this.toast.warning('Une tâche ne peut pas dépendre d\'elle-même.'); return; }
+    this.taskEnhancedService.addTaskDependency(tid, pred, this.editDependencyType, 0)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.editDependsOnTaskId = null;
+          this.refreshTaskEditDependencies();
+          this.loadTasksFromDatabase();
+        },
+        error: (err: any) => {
+          const msg = err?.error?.message || (err?.status === 409 ? 'Cette dépendance existe déjà.' : 'Impossible d\'ajouter la dépendance.');
+          this.toast.error(msg);
+        }
+      });
   }
 
-  removeDependencyFromEditModal(dependsOnTaskId: number) {
+  removeDependencyFromEditModal(dependsOnTaskId: number): void {
     const tid = this.taskToEdit?.id;
     if (!tid) return;
-    this.taskEnhancedService.removeTaskDependency(tid, dependsOnTaskId).subscribe({
-      next: () => {
-        this.refreshTaskEditDependencies();
-        this.loadTasksFromDatabase();
-      },
-      error: () => alert('Impossible de supprimer la dépendance.')
-    });
+    this.taskEnhancedService.removeTaskDependency(tid, dependsOnTaskId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => { this.refreshTaskEditDependencies(); this.loadTasksFromDatabase(); },
+        error: () => this.toast.error('Impossible de supprimer la dépendance.')
+      });
   }
 
   dependencyTypeLabel(type: string): string {
-    const m: Record<string, string> = {
-      finish_to_start: 'FS',
-      start_to_start: 'SS',
-      finish_to_finish: 'FF'
-    };
-    return m[type] || type;
+    return ({ finish_to_start: 'FS', start_to_start: 'SS', finish_to_finish: 'FF' } as any)[type] || type;
   }
 
-  removeAssignmentRow(employeeId: number) {
+  removeAssignmentRow(employeeId: number): void {
     if (!this.taskToEdit.assignments) return;
-    this.taskToEdit.assignments = this.taskToEdit.assignments.filter(
-      (a: any) => a.employee_id !== employeeId
-    );
+    this.taskToEdit.assignments = this.taskToEdit.assignments.filter((a: any) => a.employee_id !== employeeId);
   }
 
-  addEditAssignmentFromSelect() {
+  addEditAssignmentFromSelect(): void {
     const id = this.editAddEmployeeId;
     if (!id || !this.taskToEdit.assignments) return;
     if (this.taskToEdit.assignments.some((a: any) => a.employee_id === id)) {
-      alert('Cet employé est déjà dans la liste.');
-      return;
+      this.toast.warning('Cet employé est déjà dans la liste.'); return;
     }
     const u = this.allUsers.find((x: any) => x.id === id);
     if (!u) return;
     this.taskToEdit.assignments = [
       ...this.taskToEdit.assignments,
       {
-        employee_id: u.id,
-        status: 'pending',
+        employee_id: u.id, status: 'pending',
         employee_name: `${u.prenom} ${u.nom}`,
         employee_initials: `${(u.prenom || '')[0] || ''}${(u.nom || '')[0] || ''}`.toUpperCase()
       }
@@ -1063,77 +912,33 @@ export class ManagerDashboardComponent implements OnInit {
   }
 
   assignmentStatusLabel(status: string): string {
-    const m: Record<string, string> = {
-      pending: 'En attente',
-      in_progress: 'En cours',
-      completed: 'Terminée'
-    };
-    return m[status] || status;
+    return ({ pending: 'En attente', in_progress: 'En cours', completed: 'Terminée' } as any)[status] || status;
   }
 
-  getEmployeeUsers(): any[] {
-    return this.allUsers.filter((u: any) => u.role === 'employee');
-  }
+  getEmployeeUsers(): any[] { return this.allUsers.filter((u: any) => u.role === 'employee'); }
+  getOnlyEmployees(): any[] { return this.getEmployeeUsers(); }
 
-  toggleNewTaskAssignee(employeeId: number) {
-    if (!this.newTask.assignee_ids) {
-      this.newTask.assignee_ids = [];
-    }
-    const idx = this.newTask.assignee_ids.indexOf(employeeId);
-    if (idx >= 0) {
-      this.newTask.assignee_ids.splice(idx, 1);
-    } else {
-      this.newTask.assignee_ids.push(employeeId);
-    }
-  }
+  submitTaskEdit(): void {
+    if (!this.taskToEdit.title) { this.toast.warning('Le titre de la tâche est obligatoire.'); return; }
 
-  isNewTaskAssigneeSelected(employeeId: number): boolean {
-    return !!(this.newTask.assignee_ids && this.newTask.assignee_ids.includes(employeeId));
-  }
-
-  private parseTaskAssignments(task: any): any[] {
-    let raw = task.assignments;
-    if (!raw) return [];
-    if (typeof raw === 'string') {
-      try {
-        raw = JSON.parse(raw);
-      } catch {
-        return [];
-      }
-    }
-    if (!Array.isArray(raw)) return [];
-    return raw.filter((a: any) => a && a.employee_id != null);
-  }
-
-  submitTaskEdit() {
-    if (!this.taskToEdit.title) {
-      alert('Le titre de la tâche est obligatoire');
-      return;
-    }
-
-    // Convertir la date au format YYYY-MM-DD pour MySQL
     let formattedDueDate = this.taskToEdit.due_date;
-    if (formattedDueDate && formattedDueDate.includes('/')) {
-      const dateParts = formattedDueDate.split('/');
-      if (dateParts.length === 3) {
-        formattedDueDate = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`;
-      }
+    if (formattedDueDate?.includes('/')) {
+      const parts = formattedDueDate.split('/');
+      if (parts.length === 3) formattedDueDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
     }
 
     const assignmentRows = (this.taskToEdit.assignments || [])
       .map((a: any) => ({
         employee_id: Number(a.employee_id),
-        status: ['pending', 'in_progress', 'completed'].includes(a.status) ? a.status : 'pending'
+        status: ['pending','in_progress','completed'].includes(a.status) ? a.status : 'pending'
       }))
       .filter((a: any) => !Number.isNaN(a.employee_id) && a.employee_id > 0);
-
-    const firstAssignee = assignmentRows.length ? assignmentRows[0].employee_id : null;
 
     const taskData: any = {
       title: this.taskToEdit.title,
       description: this.taskToEdit.description || null,
       priority: this.taskToEdit.priority || 'medium',
-      assignee_id: firstAssignee,
+      assignee_id: assignmentRows.length ? assignmentRows[0].employee_id : null,
       project_id: this.taskToEdit.project_id || null,
       due_date: formattedDueDate || null,
       estimated_hours: this.taskToEdit.estimated_hours || null,
@@ -1148,158 +953,322 @@ export class ManagerDashboardComponent implements OnInit {
       assignments: assignmentRows
     };
 
-    console.log('Mise à jour de la tâche:', taskData);
-    
-    this.managerAuthService.updateTask(this.taskToEdit.id, taskData).subscribe({
-      next: (response: any) => {
-        console.log('Tâche mise à jour:', response);
-        alert('Tâche mise à jour avec succès');
-        this.closeEditTaskModal();
-        // Recharger les tâches
-        this.loadTasksFromDatabase();
-      },
-      error: (error: any) => {
-        console.error('Erreur lors de la mise à jour de la tâche:', error);
-        alert('Erreur lors de la mise à jour de la tâche');
-      }
-    });
-  }
-
-  // Méthodes pour la gestion des tâches
-  createTask(taskData: any) {
-    console.log('Création de la tâche:', taskData);
-    
-    this.managerAuthService.createTask(taskData).subscribe({
-      next: (response: any) => {
-        console.log('Tâche créée:', response);
-        alert('Tâche créée avec succès');
-        // Recharger les tâches
-        this.loadTasksFromDatabase();
-      },
-      error: (error: any) => {
-        console.error('Erreur lors de la création de la tâche:', error);
-        console.error('Status:', error.status);
-        console.error('Message:', error.message);
-        
-        // Gérer les erreurs spécifiques
-        if (error.status === 400) {
-          alert('Erreur: Données invalides. Vérifiez les champs obligatoires.');
-        } else if (error.status === 401) {
-          alert('Erreur: Vous n\'êtes pas autorisé à créer cette tâche.');
-        } else if (error.status === 500) {
-          alert('Erreur: Problème serveur. Veuillez réessayer plus tard.');
-        } else {
-          alert('Erreur lors de la création de la tâche: ' + (error.message || 'Erreur inconnue'));
-        }
-      }
-    });
-  }
-
-  updateTaskStatus(taskId: number, newStatus: string) {
-    console.log('Mise à jour du statut de la tâche:', taskId, newStatus);
-    console.log('Tâche complète:', this.draggedTask);
-    
-    // Vérifier si la tâche a les propriétés nécessaires
-    if (!this.draggedTask || !this.draggedTask.id) {
-      console.error('Tâche invalide ou ID manquant:', this.draggedTask);
-      alert('Erreur: Tâche invalide');
-      return;
-    }
-    
-    this.managerAuthService.updateTaskStatus(this.draggedTask.id, newStatus).subscribe({
-      next: (response: any) => {
-        console.log('Statut de la tâche mis à jour:', response);
-        // Recharger les tâches
-        this.loadTasksFromDatabase();
-      },
-      error: (error: any) => {
-        console.error('Erreur lors de la mise à jour du statut:', error);
-        console.error('Status:', error.status);
-        console.error('Message:', error.message);
-        
-        // Gérer les erreurs spécifiques
-        if (error.status === 400) {
-          const msg =
-            error?.error?.message ||
-            'Données invalides pour la mise à jour du statut (dépendances ou règles métier).';
-          alert(msg);
-        } else if (error.status === 401) {
-          alert('Erreur: Vous n\'êtes pas autorisé à modifier cette tâche.');
-        } else if (error.status === 404) {
-          alert('Erreur: Tâche non trouvée.');
-        } else if (error.status === 500) {
-          alert('Erreur: Problème serveur. Veuillez réessayer plus tard.');
-        } else {
-          alert('Erreur lors de la mise à jour du statut: ' + (error.message || 'Erreur inconnue'));
-        }
-      }
-    });
-  }
-
-  deleteTask(taskId: number) {
-    if (confirm('Êtes-vous sûr de vouloir supprimer cette tâche ?')) {
-      this.managerAuthService.deleteTask(taskId).subscribe({
+    this.managerAuthService.updateTask(this.taskToEdit.id, taskData)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
         next: () => {
+          this.toast.success('Tâche mise à jour avec succès.');
+          this.closeEditTaskModal();
           this.loadTasksFromDatabase();
         },
-        error: (error) => {
-          console.error('Erreur lors de la suppression de la tâche:', error);
-          alert('Erreur lors de la suppression de la tâche');
+        error: () => this.toast.error('Erreur lors de la mise à jour de la tâche.')
+      });
+  }
+
+  updateTaskStatus(taskId: number, newStatus: string): void {
+    if (!this.draggedTask?.id) { this.toast.error('Tâche invalide.'); return; }
+    this.managerAuthService.updateTaskStatus(this.draggedTask.id, newStatus)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => this.loadTasksFromDatabase(),
+        error: (err: any) => {
+          const msg = err?.error?.message || 'Erreur lors de la mise à jour du statut.';
+          this.toast.error(msg);
         }
       });
+  }
+
+  approveTask(taskId: number): void {
+    this.managerAuthService.approveTask(taskId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => { this.toast.success('Tâche approuvée.'); this.loadTasksFromDatabase(); },
+        error: () => this.toast.error('Erreur lors de l\'approbation.')
+      });
+  }
+
+  rejectTask(taskId: number): void {
+    this.managerAuthService.rejectTask(taskId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => { this.toast.success('Tâche rejetée.'); this.loadTasksFromDatabase(); },
+        error: () => this.toast.error('Erreur lors du rejet.')
+      });
+  }
+
+  deleteTask(taskId: number): void {
+    if (!confirm('Supprimer cette tâche ?')) return;
+    this.managerAuthService.deleteTask(taskId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => { this.toast.success('Tâche supprimée.'); this.loadTasksFromDatabase(); },
+        error: () => this.toast.error('Erreur lors de la suppression de la tâche.')
+      });
+  }
+
+  viewTaskDetails(task: Task): void {
+    this.editTask(task);
+  }
+
+  toggleTaskSelection(taskId: number): void {
+    const index = this.selectedTaskIds.indexOf(taskId);
+    if (index > -1) this.selectedTaskIds.splice(index, 1);
+    else this.selectedTaskIds.push(taskId);
+  }
+
+  approveSelectedTasks(): void {
+    if (!this.selectedTaskIds.length) { this.toast.warning('Veuillez sélectionner au moins une tâche.'); return; }
+    if (!confirm(`Approuver ${this.selectedTaskIds.length} tâche(s) sélectionnée(s) ?`)) return;
+    this.selectedTaskIds.forEach(id => this.approveTask(id));
+    this.selectedTaskIds = [];
+  }
+
+  rejectSelectedTasks(): void {
+    if (!this.selectedTaskIds.length) { this.toast.warning('Veuillez sélectionner au moins une tâche.'); return; }
+    if (!confirm(`Rejeter ${this.selectedTaskIds.length} tâche(s) sélectionnée(s) ?`)) return;
+    this.selectedTaskIds.forEach(id => this.rejectTask(id));
+    this.selectedTaskIds = [];
+  }
+
+  // ─── DRAG AND DROP ────────────────────────────────────────────────────────
+
+  onDragStart(task: any, event: DragEvent): void {
+    this.draggedTask = task;
+    event.dataTransfer!.effectAllowed = 'move';
+  }
+  onDragEnd(_event: DragEvent): void { this.draggedTask = null; this.draggedOverColumn = ''; }
+  onDragOver(event: DragEvent): void { event.preventDefault(); event.dataTransfer!.dropEffect = 'move'; }
+  onDragEnter(event: DragEvent): void { event.preventDefault(); }
+  onDragLeave(_event: DragEvent): void {}
+  onDrop(event: DragEvent, targetStatus: string): void {
+    event.preventDefault();
+    if (!this.draggedTask || this.draggedTask.status === targetStatus) return;
+    this.updateTaskStatus(this.draggedTask.id, targetStatus);
+  }
+
+  // ─── UTILISATEURS ─────────────────────────────────────────────────────────
+
+  openCreateUserModal(): void { this.showCreateUserModal = true; }
+  closeCreateUserModal(): void { this.showCreateUserModal = false; this.resetUserForm(); }
+
+  resetUserForm(): void {
+    this.newUser = { nom: '', prenom: '', email: '', password: '', role: '', telephone: '' };
+  }
+
+  submitUser(): void {
+    if (!this.newUser.nom || !this.newUser.prenom || !this.newUser.email || !this.newUser.password || !this.newUser.role) {
+      this.toast.warning('Veuillez remplir tous les champs obligatoires.');
+      return;
+    }
+    if (this.newUser.password.length < 8) {
+      this.toast.warning('Le mot de passe doit contenir au moins 8 caractères.');
+      return;
+    }
+    this.managerAuthService.createUser(this.newUser)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.toast.success('Utilisateur créé avec succès.');
+          this.closeCreateUserModal();
+          this.loadUsersFromDatabase();
+        },
+        error: (err: any) => {
+          if (err.status !== 401 && err.status !== 403) {
+            const msg = err?.error?.message || 'Erreur lors de la création de l\'utilisateur.';
+            this.toast.error(msg);
+          }
+        }
+      });
+  }
+
+  editUser(user: any): void { this.userToEdit = { ...user }; this.showEditUserModal = true; }
+  closeEditUserModal(): void { this.showEditUserModal = false; this.userToEdit = {}; }
+
+  submitUserEdit(): void {
+    if (!this.userToEdit.nom || !this.userToEdit.prenom || !this.userToEdit.email || !this.userToEdit.role) {
+      this.toast.warning('Veuillez remplir tous les champs obligatoires.');
+      return;
+    }
+    this.managerAuthService.updateUser(this.userToEdit.id, this.userToEdit)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.toast.success('Utilisateur mis à jour avec succès.');
+          this.closeEditUserModal();
+          this.loadUsersFromDatabase();
+        },
+        error: (err: any) => {
+          if (err.status !== 401 && err.status !== 403) {
+            const msg = err?.error?.message || 'Erreur lors de la mise à jour.';
+            this.toast.error(msg);
+          }
+        }
+      });
+  }
+
+  deleteUser(userId: number): void {
+    if (!confirm('Supprimer cet utilisateur ? Cette action est irréversible.')) return;
+    this.managerAuthService.deleteUser(userId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => { this.toast.success('Utilisateur supprimé.'); this.loadUsersFromDatabase(); },
+        error: () => this.toast.error('Erreur lors de la suppression de l\'utilisateur.')
+      });
+  }
+
+  // ─── RÉUNIONS ─────────────────────────────────────────────────────────────
+
+  openCreateMeetingModal(): void { this.showCreateMeetingModal = true; }
+  closeCreateMeetingModal(): void { this.showCreateMeetingModal = false; this.resetMeetingForm(); }
+  openViewMeetingModal(): void { this.showViewMeetingModal = true; }
+  closeViewMeetingModal(): void { this.showViewMeetingModal = false; this.selectedMeeting = null; }
+  openEditMeetingModal(): void { this.showEditMeetingModal = true; }
+  closeEditMeetingModal(): void { this.showEditMeetingModal = false; this.resetMeetingForm(); }
+
+  createMeeting(): void {
+    if (!this.newMeeting.title || !this.newMeeting.date) {
+      this.toast.warning('Veuillez remplir les champs obligatoires.');
+      return;
+    }
+    this.loading = true;
+    const meetingData = {
+      title: this.newMeeting.title,
+      description: this.newMeeting.notes || this.newMeeting.title,
+      date_time: new Date(this.newMeeting.date).toISOString(),
+      duration: this.newMeeting.duration,
+      location: this.newMeeting.location,
+      type: this.newMeeting.type,
+      status: 'upcoming' as const,
+      participants: this.newMeeting.participants || 1,
+      agenda: this.newMeeting.agenda || [],
+      notes: this.newMeeting.notes || '',
+      selectedEmployees: this.newMeeting.selectedEmployees || []
+    };
+
+    this.managerAuthService.createMeeting(meetingData)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.loading = false;
+          this.closeCreateMeetingModal();
+          this.toast.success('Réunion créée avec succès.');
+          this.loadMeetingsFromDatabase();
+        },
+        error: () => { this.loading = false; this.toast.error('Erreur lors de la création de la réunion.'); }
+      });
+  }
+
+  viewMeeting(meeting: any): void { this.selectedMeeting = meeting; this.openViewMeetingModal(); }
+
+  editMeeting(meeting: any): void { this.meetingToEdit = { ...meeting }; this.openEditMeetingModal(); }
+
+  updateMeeting(): void {
+    if (!this.meetingToEdit.title || !this.meetingToEdit.date) {
+      this.toast.warning('Veuillez remplir les champs obligatoires.');
+      return;
+    }
+    this.loading = true;
+    const meetingData = {
+      title: this.meetingToEdit.title,
+      description: this.meetingToEdit.notes || this.meetingToEdit.title,
+      date_time: new Date(this.meetingToEdit.date).toISOString(),
+      duration: this.meetingToEdit.duration,
+      location: this.meetingToEdit.location,
+      type: this.meetingToEdit.type,
+      participants: this.meetingToEdit.participants || 1,
+      agenda: this.meetingToEdit.agenda || [],
+      notes: this.meetingToEdit.notes || ''
+    };
+
+    this.managerAuthService.updateMeeting(this.meetingToEdit.id, meetingData)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.loading = false;
+          this.closeEditMeetingModal();
+          this.toast.success('Réunion mise à jour avec succès.');
+          this.loadMeetingsFromDatabase();
+        },
+        error: () => { this.loading = false; this.toast.error('Erreur lors de la mise à jour de la réunion.'); }
+      });
+  }
+
+  deleteMeeting(meetingId: number): void {
+    if (!confirm('Supprimer cette réunion ?')) return;
+    this.managerAuthService.deleteMeeting(meetingId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.toast.success('Réunion supprimée.');
+          this.meetings = this.meetings.filter(m => m.id !== meetingId);
+          this.upcomingMeetings = this.meetings.filter(m => m.status === 'upcoming' || m.status === 'scheduled');
+          this.syncCalendarWithMeetings();
+        },
+        error: () => this.toast.error('Erreur lors de la suppression de la réunion.')
+      });
+  }
+
+  getMeetingParticipants(meeting: any): any[] {
+    const employees = this.allUsers.filter(u => u.role === 'employee');
+    if (employees.length > 0) {
+      return employees.slice(0, Math.min(meeting.participants || 3, employees.length)).map(u => ({
+        name: u.name, initials: u.initials, color: this.getAvatarColorHex(u.id)
+      }));
+    }
+    const colors = ['#10B981','#3B82F6','#F59E0B','#EF4444','#8B5CF6','#EC4899'];
+    return Array.from({ length: meeting.participants || 3 }, (_, i) => ({
+      name: `Participant ${i+1}`, initials: `P${i+1}`, color: colors[i % colors.length]
+    }));
+  }
+
+  private getAvatarColorHex(id: number): string {
+    const colors = ['#8B5CF6','#14B8A6','#F59E0B','#F43F5E','#3B82F6','#22C55E'];
+    return colors[id % colors.length];
+  }
+
+  resetMeetingForm(): void {
+    this.newMeeting = { title: '', date: '', duration: '1h', location: 'Salle A', type: 'team', agenda: [], participants: [], selectedEmployees: [], notes: '' };
+  }
+
+  updateSelectedEmployees(employeeId: number, event: any): void {
+    if (!this.newMeeting.selectedEmployees) this.newMeeting.selectedEmployees = [];
+    const isChecked = event.target?.checked || false;
+    if (isChecked && !this.newMeeting.selectedEmployees.includes(employeeId)) {
+      this.newMeeting.selectedEmployees.push(employeeId);
+    } else {
+      const i = this.newMeeting.selectedEmployees.indexOf(employeeId);
+      if (i > -1) this.newMeeting.selectedEmployees.splice(i, 1);
     }
   }
 
-  // --- GESTION DES DOCUMENTS ---
-  loadDocuments() {
+  // ─── DOCUMENTS ────────────────────────────────────────────────────────────
+
+  loadDocuments(): void {
     this.loading = true;
-    this.documentsService.getAllDocuments().subscribe({
-      next: (response) => {
-        if (response.success) {
-          this.documents = response.data;
-        }
-        this.loading = false;
-      },
-      error: (error) => {
-        console.error('Erreur lors du chargement des documents:', error);
-        this.loading = false;
-      }
-    });
+    this.documentsService.getAllDocuments()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => { if (response.success) this.documents = response.data; this.loading = false; },
+        error: () => { this.loading = false; this.toast.error('Erreur lors du chargement des documents.'); }
+      });
   }
 
-  openAddDocumentModal() {
+  openAddDocumentModal(): void {
     this.showAddDocumentModal = true;
     this.newDocData = { title: '', description: '', employeeId: null };
     this.selectedFile = null;
-    
-    // S'assurer que les employés sont chargés
-    if (this.allUsers.length === 0) {
-      this.loadUsersFromDatabase();
-      
-      // Vérifier après un court délai si les employés sont disponibles
-      setTimeout(() => {
-        if (this.allUsers.length === 0) {
-          alert('Erreur: Impossible de charger la liste des employés. Veuillez réessayer.');
-          this.closeAddDocumentModal();
-        }
-      }, 2000);
-    }
+    if (this.allUsers.length === 0) this.loadUsersFromDatabase();
   }
 
-  closeAddDocumentModal() {
-    this.showAddDocumentModal = false;
-  }
+  closeAddDocumentModal(): void { this.showAddDocumentModal = false; }
 
-  onFileSelected(event: any) {
-    this.selectedFile = event.target.files[0];
-  }
+  onFileSelected(event: any): void { this.selectedFile = event.target.files[0]; }
 
-  submitDocument() {
+  submitDocument(): void {
     if (!this.newDocData.title || !this.selectedFile || !this.newDocData.employeeId) {
-      alert('Veuillez remplir tous les champs obligatoires.');
+      this.toast.warning('Veuillez remplir tous les champs obligatoires.');
       return;
     }
-
     const formData = new FormData();
     formData.append('file', this.selectedFile);
     formData.append('title', this.newDocData.title);
@@ -1307,43 +1276,39 @@ export class ManagerDashboardComponent implements OnInit {
     formData.append('employeeId', this.newDocData.employeeId.toString());
 
     this.loading = true;
-    this.documentsService.uploadDocument(formData).subscribe({
-      next: (response) => {
-        if (response.success) {
-          alert('Document ajouté avec succès.');
-          this.closeAddDocumentModal();
-          this.loadDocuments();
-        }
-        this.loading = false;
-      },
-      error: (error) => {
-        console.error('Erreur lors de l\'ajout du document:', error);
-        alert(error.error?.message || 'Erreur lors de l\'ajout du document.');
-        this.loading = false;
-      }
-    });
-  }
-
-  deleteDocument(id: number) {
-    if (confirm('Êtes-vous sûr de vouloir supprimer ce document ?')) {
-      this.documentsService.deleteDocument(id).subscribe({
+    this.documentsService.uploadDocument(formData)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
         next: (response) => {
           if (response.success) {
+            this.toast.success('Document ajouté avec succès.');
+            this.closeAddDocumentModal();
             this.loadDocuments();
           }
+          this.loading = false;
         },
-        error: (error) => {
-          console.error('Erreur lors de la suppression du document:', error);
+        error: (err) => {
+          this.loading = false;
+          this.toast.error(err.error?.message || 'Erreur lors de l\'ajout du document.');
         }
       });
-    }
   }
 
-  getFilteredDocuments() {
+  deleteDocument(id: number): void {
+    if (!confirm('Supprimer ce document ?')) return;
+    this.documentsService.deleteDocument(id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => { if (response.success) { this.toast.success('Document supprimé.'); this.loadDocuments(); } },
+        error: () => this.toast.error('Erreur lors de la suppression du document.')
+      });
+  }
+
+  getFilteredDocuments(): Document[] {
     if (!this.searchTerm) return this.documents;
     const term = this.searchTerm.toLowerCase();
-    return this.documents.filter(doc => 
-      doc.title.toLowerCase().includes(term) || 
+    return this.documents.filter(doc =>
+      doc.title.toLowerCase().includes(term) ||
       doc.employee_name?.toLowerCase().includes(term) ||
       doc.file_name.toLowerCase().includes(term)
     );
@@ -1356,1055 +1321,118 @@ export class ManagerDashboardComponent implements OnInit {
     return 'bi-file-earmark-text';
   }
 
-  // Formulaire de création de tâche
-  newTask = {
-    title: '',
-    description: '',
-    priority: 'medium',
-    assignee_id: null as number | null,
-    assignee_ids: [] as number[],
-    project_id: null,
-    due_date: '',
-    estimated_hours: 0,
-    tags: [] as string[]
-  };
+  // ─── PLANNING / IA ────────────────────────────────────────────────────────
 
-  // Formulaire de création d'utilisateur
-  newUser = {
-    nom: '',
-    prenom: '',
-    email: '',
-    password: '',
-    role: '',
-    telephone: ''
-  };
-
-  // Formulaire d'édition d'utilisateur
-  userToEdit: any = {};
-
-  showCreateTaskModal = false;
-
-  openCreateTaskModal() {
-    this.showCreateTaskModal = true;
-  }
-
-  closeCreateTaskModal() {
-    this.showCreateTaskModal = false;
-    this.resetTaskForm();
-  }
-
-  // Méthodes pour le modal de création d'utilisateur
-  openCreateUserModal() {
-    this.showCreateUserModal = true;
-  }
-
-  closeCreateUserModal() {
-    this.showCreateUserModal = false;
-    this.resetUserForm();
-  }
-
-  resetUserForm() {
-    this.newUser = {
-      nom: '',
-      prenom: '',
-      email: '',
-      password: '',
-      role: '',
-      telephone: ''
-    };
-  }
-
-  submitUser() {
-    if (!this.newUser.nom || !this.newUser.prenom || !this.newUser.email || !this.newUser.password || !this.newUser.role) {
-      alert('Veuillez remplir tous les champs obligatoires');
-      return;
-    }
-
-    console.log('Création de l\'utilisateur:', this.newUser);
-    
-    this.managerAuthService.createUser(this.newUser).subscribe({
-      next: (response: any) => {
-        console.log('Utilisateur créé:', response);
-        alert('Utilisateur créé avec succès');
-        this.closeCreateUserModal();
-        // Recharger la liste des utilisateurs
-        this.loadUsersFromDatabase();
-      },
-      error: (error: any) => {
-        console.error('Erreur lors de la création de l\'utilisateur:', error);
-        console.error('Status:', error.status);
-        console.error('Message:', error.message);
-        
-        // Gérer les erreurs spécifiques
-        if (error.status === 400) {
-          alert('Erreur: Données invalides. Vérifiez les champs obligatoires.');
-        } else if (error.status === 401) {
-          alert('Erreur: Vous n\'êtes pas autorisé à créer des utilisateurs.');
-        } else if (error.status === 409) {
-          alert('Erreur: Cet email est déjà utilisé.');
-        } else if (error.status === 500) {
-          alert('Erreur: Problème serveur. Veuillez réessayer plus tard.');
-        } else {
-          alert('Erreur lors de la création de l\'utilisateur: ' + (error.message || 'Erreur inconnue'));
-        }
-      }
-    });
-  }
-
-  // Méthodes pour l'édition d'utilisateur
-  editUser(user: any) {
-    console.log('Modification de l\'utilisateur:', user);
-    this.userToEdit = { ...user };
-    this.showEditUserModal = true;
-  }
-
-  closeEditUserModal() {
-    this.showEditUserModal = false;
-    this.userToEdit = {};
-  }
-
-  submitUserEdit() {
-    if (!this.userToEdit.nom || !this.userToEdit.prenom || !this.userToEdit.email || !this.userToEdit.role) {
-      alert('Veuillez remplir tous les champs obligatoires');
-      return;
-    }
-
-    console.log('Mise à jour de l\'utilisateur:', this.userToEdit);
-    
-    this.managerAuthService.updateUser(this.userToEdit.id, this.userToEdit).subscribe({
-      next: (response: any) => {
-        console.log('Utilisateur mis à jour:', response);
-        alert('Utilisateur mis à jour avec succès');
-        this.closeEditUserModal();
-        // Recharger la liste des utilisateurs
-        this.loadUsersFromDatabase();
-      },
-      error: (error: any) => {
-        console.error('Erreur lors de la mise à jour de l\'utilisateur:', error);
-        console.error('Status:', error.status);
-        console.error('Message:', error.message);
-        
-        // Gérer les erreurs spécifiques
-        if (error.status === 400) {
-          alert('Erreur: Données invalides. Vérifiez les champs obligatoires.');
-        } else if (error.status === 401) {
-          alert('Erreur: Vous n\'êtes pas autorisé à modifier cet utilisateur.');
-        } else if (error.status === 404) {
-          alert('Erreur: Utilisateur non trouvé.');
-        } else if (error.status === 409) {
-          alert('Erreur: Cet email est déjà utilisé.');
-        } else if (error.status === 500) {
-          alert('Erreur: Problème serveur. Veuillez réessayer plus tard.');
-        } else {
-          alert('Erreur lors de la mise à jour de l\'utilisateur: ' + (error.message || 'Erreur inconnue'));
-        }
-      }
-    });
-  }
-
-  // Méthode pour la suppression d'utilisateur
-  deleteUser(userId: number) {
-    if (confirm('Êtes-vous sûr de vouloir supprimer cet utilisateur ? Cette action est irréversible.')) {
-      console.log('Suppression de l\'utilisateur:', userId);
-      
-      this.managerAuthService.deleteUser(userId).subscribe({
-        next: (response: any) => {
-          console.log('Utilisateur supprimé:', response);
-          alert('Utilisateur supprimé avec succès');
-          // Recharger la liste des utilisateurs
-          this.loadUsersFromDatabase();
+  loadPlannings(): void {
+    if (!this.currentManager) return;
+    this.iaService.getPlannings(this.currentManager.id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (plannings: any[]) => {
+          this.savedPlannings = plannings.map(p => ({
+            ...p,
+            simulation_data: typeof p.simulation_data === 'string' ? JSON.parse(p.simulation_data) : p.simulation_data
+          }));
         },
-        error: (error: any) => {
-          console.error('Erreur lors de la suppression de l\'utilisateur:', error);
-          console.error('Status:', error.status);
-          console.error('Message:', error.message);
-          
-          // Gérer les erreurs spécifiques
-          if (error.status === 401) {
-            alert('Erreur: Vous n\'êtes pas autorisé à supprimer cet utilisateur.');
-          } else if (error.status === 404) {
-            alert('Erreur: Utilisateur non trouvé.');
-          } else if (error.status === 500) {
-            alert('Erreur: Problème serveur. Veuillez réessayer plus tard.');
-          } else {
-            alert('Erreur lors de la suppression de l\'utilisateur: ' + (error.message || 'Erreur inconnue'));
-          }
-        }
+        error: () => this.toast.error('Erreur lors du chargement des plannings.')
       });
-    }
   }
 
-  resetTaskForm() {
-    this.newTask = {
-      title: '',
-      description: '',
-      priority: 'medium',
-      assignee_id: null,
-      assignee_ids: [],
-      project_id: null,
-      due_date: '',
-      estimated_hours: 0,
-      tags: []
-    };
+  deletePlanning(id: number): void {
+    if (!confirm('Supprimer cette simulation ?')) return;
+    this.savedPlannings = this.savedPlannings.filter(p => p.id !== id);
   }
 
-  submitTask() {
-    if (!this.newTask.title) {
-      alert('Le titre de la tâche est obligatoire');
-      return;
-    }
+  viewPlanningDetails(_planning: any): void {}
 
-    const taskData = {
-      ...this.newTask,
-      creator_id: this.currentManager?.id,
-      assignee_ids: this.newTask.assignee_ids && this.newTask.assignee_ids.length > 0
-        ? [...this.newTask.assignee_ids]
-        : (this.newTask.assignee_id ? [this.newTask.assignee_id] : []),
-      assignee_id: this.newTask.assignee_ids && this.newTask.assignee_ids.length > 0
-        ? this.newTask.assignee_ids[0]
-        : (this.newTask.assignee_id || null),
-      project_id: this.newTask.project_id || null,
-      due_date: this.newTask.due_date || null,
-      estimated_hours: this.newTask.estimated_hours || null,
-      tags: this.newTask.tags.length > 0 ? JSON.stringify(this.newTask.tags) : null
-    };
-
-    console.log('Données de la tâche à créer:', taskData);
-    this.createTask(taskData);
-    this.closeCreateTaskModal();
-  }
-
-  // Propriétés pour les statistiques
-  totalHours = 0;
-  avgHoursPerDay = 0;
-  workedDays = 0;
-  weekDays = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-  calendarDays: CalendarDay[] = [];
-  
-  // Propriétés pour la performance d'équipe
-  teamPerformance: any[] = [];
-
-  // Méthodes pour calculer les statistiques
-  calculateStats() {
-    console.log('=== CALCUL DES STATISTIQUES RÉELLES ===');
-    
-    // Statistiques des utilisateurs
-    this.globalStats.totalEmployees = this.allUsers.length;
-    console.log('Total employés:', this.globalStats.totalEmployees);
-    
-    // Statistiques des projets
-    this.globalStats.activeProjects = this.recentProjects.filter(p => p.status === 'active').length;
-    console.log('Projets actifs:', this.globalStats.activeProjects);
-    
-    // Statistiques des tâches
-    const completedTasks = this.tasks.filter(t => t.status === 'done').length;
-    const totalTasks = this.tasks.length;
-    this.globalStats.completedTasks = completedTasks;
-    console.log('Tâches complétées:', completedTasks, '/', totalTasks);
-    
-    // Définir les tâches en attente (todo et in_progress)
-    this.pendingTasks = this.tasks.filter(t => t.status === 'todo' || t.status === 'in_progress');
-    this.todoTasks = this.tasks.filter(t => t.status === 'todo');
-    this.inProgressTasks = this.tasks.filter(t => t.status === 'in_progress');
-    
-    // Conserver les doneTasks existants (structure différente)
-    // this.doneTasks reste inchangé
-    
-    console.log('Tâches en attente:', this.pendingTasks.length);
-    console.log('Tâches à faire:', this.todoTasks.length);
-    console.log('Tâches en cours:', this.inProgressTasks.length);
-    console.log('Tâches terminées (doneTasks):', this.doneTasks.length);
-    
-    // Statistiques des réunions à venir
-    const upcomingMeetingsCount = this.meetings.filter(m => 
-      m.status === 'upcoming' || m.status === 'scheduled'
-    ).length;
-    this.globalStats.pendingApprovals = upcomingMeetingsCount;
-    console.log('Réunions à venir:', upcomingMeetingsCount);
-    
-    // Statistiques supplémentaires
-    this.managersCount = this.allUsers.filter(u => u.role === 'manager').length;
-    this.employeesCount = this.allUsers.filter(u => u.role === 'employee').length;
-    this.adminsCount = this.allUsers.filter(u => u.role === 'admin').length;
-    
-    // Calculer la performance de l'équipe avec des données réelles
-    this.teamPerformance = this.allUsers.map(user => {
-      const userTasks = this.tasks.filter(task => task.assignee === `${user.prenom} ${user.nom}`);
-      const completedTasks = userTasks.filter(task => task.status === 'done').length;
-      const ongoingTasks = userTasks.filter(task => task.status === 'in_progress').length;
-      const totalTasks = userTasks.length;
-      
-      // Calculer l'efficacité basée sur les tâches complétées
-      const efficiency = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-      
-      return {
-        id: user.id,
-        name: `${user.prenom} ${user.nom}`,
-        completedTasks: completedTasks,
-        ongoingTasks: ongoingTasks,
-        efficiency: efficiency,
-        avatarColor: user.avatarColor
-      };
-    });
-    
-    console.log('Répartition par rôle:', {
-      managers: this.managersCount,
-      employees: this.employeesCount,
-      admins: this.adminsCount
-    });
-    
-    console.log('Performance de l\'équipe:', this.teamPerformance);
-    
-    // Synchroniser le calendrier avec les réunions réelles
-    this.syncCalendarWithMeetings();
-    
-    console.log('Statistiques finales:', this.globalStats);
-    console.log('=== FIN CALCUL STATISTIQUES ===');
-  }
-
-  // Synchroniser le calendrier avec les réunions
-  syncCalendarWithMeetings() {
-    console.log('=== SYNCHRONISATION CALENDRIER ===');
-    console.log('Réunions disponibles:', this.meetings);
-    
-    const currentYear = this.currentCalendarDate.getFullYear();
-    const currentMonth = this.currentCalendarDate.getMonth();
-    
-    console.log('Mois/année affichés:', currentMonth, currentYear);
-    
-    // Mettre à jour le titre du calendrier
-    const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 
-                     'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
-    this.calendarMonth = monthNames[currentMonth];
-    this.calendarYear = currentYear;
-    
-    // Obtenir le nombre de jours dans le mois courant
-    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-    
-    console.log('Nombre de jours dans le mois:', daysInMonth);
-    
-    // Initialiser le calendrier avec les jours du mois
-    this.calendarDays = Array.from({length: daysInMonth }, (_, i) => {
-      const dayNumber = i + 1;
-      const dayDate = new Date(currentYear, currentMonth, dayNumber);
-      
-      return {
-        number: dayNumber,
-        isToday: this.isToday(dayDate),
-        hasMeeting: false,
-        meetings: []
-      };
-    });
-    
-    console.log('Jours du calendrier initialisés:', this.calendarDays.length);
-    
-    // Ajouter les réunions au calendrier
-    this.meetings.forEach(meeting => {
-      console.log('Traitement de la réunion:', meeting.title, meeting.date);
-      
-      const meetingDate = new Date(meeting.date);
-      console.log('Date de la réunion:', meetingDate, 'Mois:', meetingDate.getMonth(), 'Année:', meetingDate.getFullYear());
-      
-      // Vérifier si la réunion est dans le mois affiché
-      if (meetingDate.getMonth() === currentMonth && 
-          meetingDate.getFullYear() === currentYear) {
-        
-        const dayNumber = meetingDate.getDate();
-        const calendarDay = this.calendarDays.find(day => day.number === dayNumber);
-        
-        console.log('Jour trouvé pour le', dayNumber, ':', calendarDay ? 'OUI' : 'NON');
-        
-        if (calendarDay) {
-          calendarDay.hasMeeting = true;
-          calendarDay.meetings.push({
-            color: meeting.color || this.getMeetingTypeColor(meeting.type),
-            title: meeting.title,
-            time: meetingDate.toLocaleTimeString('fr-FR', { 
-              hour: '2-digit', 
-              minute: '2-digit' 
-            })
-          });
-          console.log('Réunion ajoutée au calendrier:', meeting.title, 'le jour', dayNumber);
-        }
-      } else {
-        console.log('Réunion hors du mois affiché');
-      }
-    });
-    
-    // Trier les réunions par heure pour chaque jour
-    this.calendarDays.forEach(day => {
-      day.meetings.sort((a, b) => {
-        const timeA = parseInt(a.time.replace(':', ''));
-        const timeB = parseInt(b.time.replace(':', ''));
-        return timeA - timeB;
-      });
-    });
-    
-    console.log('Jours avec réunions:', this.calendarDays.filter(day => day.hasMeeting).length);
-    console.log('=== FIN SYNCHRONISATION ===');
-  }
-
-  // Vérifier si une date est aujourd'hui
-  isToday(date: Date): boolean {
-    const today = new Date();
-    return date.getDate() === today.getDate() &&
-           date.getMonth() === today.getMonth() &&
-           date.getFullYear() === today.getFullYear();
-  }
-
-  // Navigation dans le calendrier
-  previousMonth() {
-    this.currentCalendarDate = new Date(
-      this.currentCalendarDate.getFullYear(),
-      this.currentCalendarDate.getMonth() - 1,
-      1
-    );
-    this.syncCalendarWithMeetings();
-  }
-
-  nextMonth() {
-    this.currentCalendarDate = new Date(
-      this.currentCalendarDate.getFullYear(),
-      this.currentCalendarDate.getMonth() + 1,
-      1
-    );
-    this.syncCalendarWithMeetings();
-  }
-
-  // Revenir au mois actuel
-  goToCurrentMonth() {
-    this.currentCalendarDate = new Date();
-    this.syncCalendarWithMeetings();
-  }
-
-  // Obtenir le texte du tooltip pour un jour avec réunions
-  getDayMeetingsTooltip(day: CalendarDay): string {
-    if (!day.meetings || day.meetings.length === 0) {
-      return '';
-    }
-    
-    const meetingList = day.meetings
-      .map(meeting => `• ${meeting.time} - ${meeting.title}`)
-      .join('\n');
-    
-    return `${day.meetings.length} réunion(s) ce jour:\n${meetingList}`;
-  }
-
-  // Afficher les réunions du jour
-  showDayMeetingsModalFunc(day: CalendarDay) {
-    this.selectedDay = day;
-    this.selectedDayMeetings = day.meetings.map(meeting => {
-      // Trouver la réunion complète correspondante
-      const fullMeeting = this.meetings.find(m => 
-        m.title === meeting.title && 
-        new Date(m.date).getDate() === day.number
-      );
-      return fullMeeting || meeting;
-    });
-    this.showDayMeetingsModal = true;
-  }
-
-  // Fermer le modal des réunions du jour
-  closeDayMeetingsModal() {
-    this.showDayMeetingsModal = false;
-    this.selectedDay = null;
-    this.selectedDayMeetings = [];
-  }
-
-  // Ouvrir le modal de création pour un jour spécifique
-  openCreateMeetingModalForDay() {
-    if (this.selectedDay) {
-      // Pré-remplir la date avec le jour sélectionné
-      const dayDate = new Date(
-        this.currentCalendarDate.getFullYear(),
-        this.currentCalendarDate.getMonth(),
-        this.selectedDay.number,
-        9, // 9h par défaut
-        0
-      );
-      
-      this.newMeeting.date = dayDate.toISOString().slice(0, 16); // Format YYYY-MM-DDTHH:MM
-    }
-    this.closeDayMeetingsModal();
-    this.openCreateMeetingModal();
-  }
-
-  // Voir une réunion depuis le modal du jour
-  viewMeetingFromDay(meeting: any) {
-    this.closeDayMeetingsModal();
-    this.viewMeeting(meeting);
-  }
-
-  // Modifier une réunion depuis le modal du jour
-  editMeetingFromDay(meeting: any) {
-    this.closeDayMeetingsModal();
-    this.editMeeting(meeting);
-  }
-
-  // Gestion de la sélection des tâches
-  selectedTaskIds: number[] = [];
-
-  toggleTaskSelection(taskId: number) {
-    const index = this.selectedTaskIds.indexOf(taskId);
-    if (index > -1) {
-      this.selectedTaskIds.splice(index, 1);
-    } else {
-      this.selectedTaskIds.push(taskId);
-    }
-    console.log('Tâches sélectionnées:', this.selectedTaskIds);
-  }
-
-  // Voir les détails d'une tâche
-  viewTaskDetails(task: Task) {
-    console.log('Voir les détails de la tâche:', task);
-    // TODO: Ouvrir un modal avec les détails de la tâche
-    alert(`Détails de la tâche: ${task.title}\nDescription: ${task.description}\nPriorité: ${task.priority}\nAssigné à: ${task.assignee}`);
-  }
-
-  // Approuver plusieurs tâches sélectionnées
-  approveSelectedTasks() {
-    if (this.selectedTaskIds.length === 0) {
-      alert('Veuillez sélectionner au moins une tâche');
-      return;
-    }
-    
-    if (confirm(`Approuver ${this.selectedTaskIds.length} tâche(s) sélectionnée(s)?`)) {
-      this.selectedTaskIds.forEach(taskId => {
-        this.approveTask(taskId);
-      });
-      this.selectedTaskIds = [];
-    }
-  }
-
-  // Rejeter plusieurs tâches sélectionnées
-  rejectSelectedTasks() {
-    if (this.selectedTaskIds.length === 0) {
-      alert('Veuillez sélectionner au moins une tâche');
-      return;
-    }
-    
-    if (confirm(`Rejeter ${this.selectedTaskIds.length} tâche(s) sélectionnée(s)?`)) {
-      this.selectedTaskIds.forEach(taskId => {
-        this.rejectTask(taskId);
-      });
-      this.selectedTaskIds = [];
-    }
-  }
-
-  // Méthodes pour la création de projet
-  openCreateProjectModal() {
-    this.showCreateProjectModal = true;
-  }
-
-  closeCreateProjectModal() {
-    this.showCreateProjectModal = false;
-    this.resetProjectForm();
-  }
-
-  resetProjectForm() {
-    this.newProject = {
-      name: '',
-      description: '',
-      team: '',
-      priority: 'medium',
-      startDate: '',
-      endDate: '',
-      budget: 0
-    };
-  }
-
-  testClick() {
-    alert('Test click fonctionne !');
-  }
-
-  createProject() {
-    alert('Bouton cliqué !');
-    console.log('createProject appelé');
-    console.log('newProject:', this.newProject);
-    console.log('loading:', this.loading);
-    
-    if (!this.newProject.name || !this.newProject.team) {
-      alert('Champs obligatoires manquants: name=' + this.newProject.name + ', team=' + this.newProject.team);
-      return;
-    }
-
-    alert('Validation OK, tentative de création...');
+  confirmGeneratedProject(projectData: any, managerId: number): void {
+    if (!confirm('Créer officiellement ce projet et ses tâches ?')) return;
     this.loading = true;
-
-    // Appeler le backend pour créer le projet
-    this.managerAuthService.createProject({
-      name: this.newProject.name,
-      description: this.newProject.description,
-      team: this.newProject.team,
-      priority: this.newProject.priority,
-      startDate: this.newProject.startDate,
-      endDate: this.newProject.endDate,
-      budget: this.newProject.budget
-    }).subscribe({
-      next: (createdProject: any) => {
-        console.log('Projet créé dans la base:', createdProject);
-        
-        // Ajouter le projet à la liste locale (pour l'affichage immédiat)
-        const displayProject = {
-          id: createdProject.data.id ? createdProject.data.id : this.recentProjects.length + 1,
-          name: createdProject.data.name,
-          description: createdProject.data.description || '',
-          progress: createdProject.data.progress || 0,
-          team: this.getTeamSize(createdProject.data.team),
-          priority: createdProject.data.priority,
-          startDate: createdProject.data.startDate || null,
-          endDate: createdProject.data.endDate || null,
-          budget: createdProject.data.budget,
-          deadline: createdProject.data.deadline || null,
-          status: createdProject.data.status
-        };
-        this.recentProjects.unshift(displayProject);
-
-        // Mettre à jour les statistiques
-        this.globalStats.activeProjects++;
-
-        // Fermer le modal et réinitialiser le formulaire
-        this.closeCreateProjectModal();
-        this.loading = false;
-        
-        alert('Projet créé avec succès dans la base de données !');
-      },
-      error: (error: any) => {
-        console.error('Erreur lors de la création du projet:', error);
-        this.loading = false;
-        
-        // En cas d'erreur backend, fallback sur la création locale
-        console.log('Fallback: création locale du projet');
-        this.createProjectLocally();
-      }
-    });
+    this.iaService.confirmGeneratedProject(projectData, managerId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.loading = false;
+          this.toast.success('Projet créé avec succès.');
+          this.navigate('projets');
+          this.loadProjectsFromDatabase();
+        },
+        error: () => { this.loading = false; this.toast.error('Erreur lors de la création du projet.'); }
+      });
   }
 
-  // Méthode de fallback pour création locale
-  createProjectLocally() {
-    const newProject = {
-      id: this.recentProjects.length + 1,
-      name: this.newProject.name,
-      description: this.newProject.description,
-      progress: 0,
-      team: this.getTeamSize(this.newProject.team),
-      priority: this.newProject.priority,
-      startDate: this.newProject.startDate,
-      endDate: this.newProject.endDate,
-      budget: this.newProject.budget,
-      deadline: this.newProject.endDate || 'À définir',
-      status: 'active'
-    };
+  // ─── HELPERS ──────────────────────────────────────────────────────────────
 
-    this.recentProjects.unshift(newProject);
-    this.globalStats.activeProjects++;
-    this.closeCreateProjectModal();
-    
-    console.log('Projet créé localement:', newProject);
-  }
-
-  // Déconnexion
-  logout() {
+  logout(): void {
     this.managerAuthService.logout();
     this.router.navigate(['/manager-login']);
   }
 
-  // Actions sur les projets
-  viewProject(project: any) {
-    console.log('Voir le projet:', project);
-    this.selectedProject = project;
-    this.showViewProjectModal = true;
+  goToGantt(): void {
+    this.router.navigate(['/gantt']);
   }
 
-  editProject(project: any) {
-    console.log('Modifier le projet:', project);
-    this.selectedProject = project;
-    this.projectToEdit = {
-      name: project.name,
-      description: project.description,
-      team: project.team,
-      priority: project.priority,
-      startDate: project.startDate,
-      endDate: project.endDate,
-      budget: project.budget
-    };
-    this.showEditProjectModal = true;
+  stopPropagation(event: Event): void { event.stopPropagation(); }
+
+  @HostListener('window:scroll', [])
+  onScroll(): void { this.isScrolled = window.scrollY > 40; }
+
+  getStatusColor(status: string): string {
+    return ({ active: '#10B981', completed: '#3B82F6', pending: '#F59E0B' } as any)[status] || '#6B7280';
   }
 
-  updateProject() {
-    console.log('Mise à jour du projet:', this.projectToEdit);
-    
-    if (!this.projectToEdit.name || !this.projectToEdit.team) {
-      alert('Veuillez remplir les champs obligatoires');
-      return;
-    }
-
-    this.loading = true;
-
-    // Convertir undefined en null pour MySQL
-    const projectData = {
-      name: this.projectToEdit.name,
-      description: this.projectToEdit.description || null,
-      team: this.projectToEdit.team,
-      priority: this.projectToEdit.priority || 'medium',
-      startDate: this.projectToEdit.startDate || null,
-      endDate: this.projectToEdit.endDate || null,
-      budget: this.projectToEdit.budget || null,
-      deadline: this.projectToEdit.endDate || null,
-      status: 'active',
-      progress: 0
-    };
-
-    // Appeler le backend pour mettre à jour le projet
-    this.managerAuthService.updateProject(this.selectedProject.id, projectData).subscribe({
-      next: (updatedProject: any) => {
-        console.log('Projet mis à jour dans la base:', updatedProject);
-        
-        // Mettre à jour le projet dans la liste locale
-        const index = this.recentProjects.findIndex(p => p.id === this.selectedProject.id);
-        if (index !== -1) {
-          this.recentProjects[index] = {
-            id: updatedProject.id,
-            name: updatedProject.name,
-            description: updatedProject.description || '',
-            progress: updatedProject.progress,
-            team: this.getTeamSize(updatedProject.team),
-            deadline: updatedProject.deadline,
-            status: updatedProject.status,
-            startDate: updatedProject.startDate,
-            endDate: updatedProject.endDate,
-            budget: updatedProject.budget,
-            priority: updatedProject.priority
-          };
-        }
-        
-        this.loading = false;
-        this.closeEditProjectModal();
-        
-        alert('Projet mis à jour avec succès !');
-      },
-      error: (error: any) => {
-        console.error('Erreur lors de la mise à jour du projet:', error);
-        this.loading = false;
-        alert('Erreur lors de la mise à jour du projet');
-      }
-    });
+  getPriorityColor(priority: string): string {
+    return ({ low: '#10B981', medium: '#F59E0B', high: '#EF4444' } as any)[priority] || '#6B7280';
   }
 
-  deleteProject(project: any) {
-    if (confirm(`Êtes-vous sûr de vouloir supprimer le projet "${project.name}" ? Toutes les tâches et dépendances associées seront également supprimées.`)) {
-      this.managerAuthService.deleteProject(project.id).subscribe({
-        next: (response: any) => {
-          console.log('Projet supprimé:', response);
-          alert('Projet supprimé avec succès');
-          this.loadProjectsFromDatabase();
-          this.loadTasksFromDatabase(); // reload tasks to reflect deleted ones
-          if (this.selectedProjectForAnalytics === project.id) {
-            this.selectedProjectForAnalytics = null;
-          }
-        },
-        error: (error: any) => {
-          console.error('Erreur lors de la suppression du projet:', error);
-          alert('Erreur lors de la suppression du projet: ' + (error.message || 'Erreur inconnue'));
-        }
-      });
-    }
+  getStatusLabel(status: string): string {
+    return ({ active: 'Actif', completed: 'Terminé', paused: 'En pause', cancelled: 'Annulé' } as any)[status] || status;
   }
 
-  // Méthodes pour les modaux
-  closeViewProjectModal() {
-    this.showViewProjectModal = false;
-    this.selectedProject = null;
+  getProjectStatusLabel(status: string): string { return this.getStatusLabel(status); }
+
+  getPriorityLabel(priority: string): string {
+    return ({ low: 'Basse', medium: 'Moyenne', high: 'Haute' } as any)[priority] || priority;
   }
 
-  closeEditProjectModal() {
-    this.showEditProjectModal = false;
-    this.selectedProject = null;
-    this.projectToEdit = {
-      name: '',
-      description: '',
-      team: '',
-      priority: 'medium',
-      startDate: '',
-      endDate: '',
-      budget: 0
-    };
+  getRoleIcon(role: string): string {
+    return ({ manager: 'bi-person-badge', admin: 'bi-shield-check', employee: 'bi-person' } as any)[role] || 'bi-person';
   }
 
-  // Méthodes pour la gestion des réunions
-  openCreateMeetingModal() {
-    this.showCreateMeetingModal = true;
+  getDocumentIcon(type: string): string {
+    return ({ pdf: 'bi-file-pdf', docx: 'bi-file-word', xlsx: 'bi-file-excel', pptx: 'bi-file-ppt', markdown: 'bi-file-code', txt: 'bi-file-text' } as any)[type] || 'bi-file';
   }
 
-  closeCreateMeetingModal() {
-    this.showCreateMeetingModal = false;
-    this.resetMeetingForm();
-  }
-
-  openViewMeetingModal() {
-    this.showViewMeetingModal = true;
-  }
-
-  closeViewMeetingModal() {
-    this.showViewMeetingModal = false;
-    this.selectedMeeting = null;
-  }
-
-  openEditMeetingModal() {
-    this.showEditMeetingModal = true;
-  }
-
-  closeEditMeetingModal() {
-    this.showEditMeetingModal = false;
-    this.resetMeetingForm();
-  }
-
-  createMeeting() {
-    if (!this.newMeeting.title || !this.newMeeting.date) {
-      alert('Veuillez remplir les champs obligatoires');
-      return;
-    }
-
-    this.loading = true;
-    
-    const meetingData = {
-      title: this.newMeeting.title,
-      description: this.newMeeting.title, // Utiliser le titre comme description par défaut
-      date_time: new Date(this.newMeeting.date).toISOString(),
-      duration: this.newMeeting.duration,
-      location: this.newMeeting.location,
-      type: this.newMeeting.type,
-      status: 'upcoming' as const,
-      participants: this.newMeeting.participants || 1,
-      agenda: this.newMeeting.agenda || [],
-      notes: this.newMeeting.notes || '',
-      selectedEmployees: this.newMeeting.selectedEmployees || []
-    };
-
-    // Créer la réunion via l'API
-    this.managerAuthService.createMeeting(meetingData).subscribe({
-      next: (response: any) => {
-        console.log('Réunion créée avec succès:', response);
-        
-        // Ajouter la réunion à la liste locale
-        const newMeeting = {
-          id: response.data?.id || response.id,
-          ...meetingData,
-          date: meetingData.date_time,
-          color: meetingData.type === 'team' ? '#10B981' : meetingData.type === 'client' ? '#3B82F6' : meetingData.type === 'technical' ? '#F59E0B' : '#8B5CF6',
-          status: 'upcoming'
-        };
-        
-        this.meetings.push(newMeeting);
-        this.upcomingMeetings = this.meetings.filter(m => m.status === 'upcoming' || m.status === 'scheduled');
-        
-        this.loading = false;
-        this.closeCreateMeetingModal();
-        
-        alert('Réunion créée avec succès !');
-      },
-      error: (error: any) => {
-        console.error('Erreur lors de la création de la réunion:', error);
-        this.loading = false;
-        alert('Erreur lors de la création de la réunion');
-      }
-    });
-  }
-
-  viewMeeting(meeting: any) {
-    this.selectedMeeting = meeting;
-    this.openViewMeetingModal();
-  }
-
-  editMeeting(meeting: any) {
-    this.meetingToEdit = { ...meeting };
-    this.openEditMeetingModal();
-  }
-
-  updateMeeting() {
-    if (!this.meetingToEdit.title || !this.meetingToEdit.date) {
-      alert('Veuillez remplir les champs obligatoires');
-      return;
-    }
-
-    this.loading = true;
-    
-    const meetingData = {
-      title: this.meetingToEdit.title,
-      description: this.meetingToEdit.title,
-      date_time: new Date(this.meetingToEdit.date).toISOString(),
-      duration: this.meetingToEdit.duration,
-      location: this.meetingToEdit.location,
-      type: this.meetingToEdit.type,
-      participants: this.meetingToEdit.participants || 1,
-      agenda: this.meetingToEdit.agenda || [],
-      notes: this.meetingToEdit.notes || ''
-    };
-
-    // Mettre à jour la réunion via l'API
-    this.managerAuthService.updateMeeting(this.meetingToEdit.id, meetingData).subscribe({
-      next: (response: any) => {
-        console.log('Réunion mise à jour avec succès:', response);
-        
-        // Mettre à jour la réunion dans la liste locale
-        const index = this.meetings.findIndex(m => m.id === this.meetingToEdit.id);
-        if (index !== -1) {
-          this.meetings[index] = {
-            ...this.meetings[index],
-            ...meetingData,
-            date: meetingData.date_time,
-            color: meetingData.type === 'team' ? '#10B981' : meetingData.type === 'client' ? '#3B82F6' : meetingData.type === 'technical' ? '#F59E0B' : '#8B5CF6'
-          };
-        }
-        
-        // Mettre à jour les réunions à venir
-        this.upcomingMeetings = this.meetings.filter(m => m.status === 'upcoming' || m.status === 'scheduled');
-        
-        this.loading = false;
-        this.closeEditMeetingModal();
-        
-        alert('Réunion mise à jour avec succès !');
-      },
-      error: (error: any) => {
-        console.error('Erreur lors de la mise à jour de la réunion:', error);
-        this.loading = false;
-        alert('Erreur lors de la mise à jour de la réunion');
-      }
-    });
-  }
-
-  deleteMeeting(meetingId: number) {
-    if (confirm('Êtes-vous sûr de vouloir supprimer cette réunion ?')) {
-      // Supprimer la réunion via l'API
-      this.managerAuthService.deleteMeeting(meetingId).subscribe({
-        next: (response: any) => {
-          console.log('Réunion supprimée avec succès:', response);
-          
-          // Supprimer la réunion de la liste locale
-          this.meetings = this.meetings.filter(m => m.id !== meetingId);
-          this.upcomingMeetings = this.meetings.filter(m => m.status === 'upcoming' || m.status === 'scheduled');
-          
-          alert('Réunion supprimée avec succès !');
-        },
-        error: (error: any) => {
-          console.error('Erreur lors de la suppression de la réunion:', error);
-          alert('Erreur lors de la suppression de la réunion');
-        }
-      });
-    }
-  }
-
-  getMeetingParticipants(meeting: any): any[] {
-    // Générer des participants fictifs pour l'affichage
-    const colors = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
-    return Array.from({length: meeting.participants || 3}, (_, i) => ({
-      name: `Participant ${i + 1}`,
-      initials: `P${i + 1}`,
-      color: colors[i % colors.length]
-    }));
-  }
-
-  resetMeetingForm() {
-    this.newMeeting = {
-      title: '',
-      date: '',
-      duration: '1h',
-      location: 'Salle A',
-      type: 'team',
-      agenda: [],
-      participants: [],
-      selectedEmployees: [],
-      notes: ''
-    };
+  getEfficiencyColor(efficiency: number): string {
+    if (efficiency >= 80) return '#10B981';
+    if (efficiency >= 60) return '#F59E0B';
+    return '#EF4444';
   }
 
   getMeetingTypeLabel(type: string): string {
-    const labels = {
-      'team': 'Équipe',
-      'client': 'Client',
-      'technical': 'Technique',
-      'review': 'Revue'
-    };
-    return labels[type as keyof typeof labels] || type;
+    return ({ team: 'Équipe', client: 'Client', technical: 'Technique', review: 'Revue' } as any)[type] || type;
   }
 
   getMeetingTypeColor(type: string): string {
-    const colors = {
-      'team': '#10B981',
-      'client': '#3B82F6',
-      'technical': '#F59E0B',
-      'review': '#8B5CF6'
-    };
-    return colors[type as keyof typeof colors] || '#6B7280';
+    return ({ team: '#10B981', client: '#3B82F6', technical: '#F59E0B', review: '#8B5CF6' } as any)[type] || '#6B7280';
   }
 
-  // Méthode pour mettre à jour la sélection des employés
-  updateSelectedEmployees(employeeId: number, event: any) {
-    const isChecked = event.target?.checked || false;
-    if (!this.newMeeting.selectedEmployees) {
-      this.newMeeting.selectedEmployees = [];
+  getGlobalTotalProjects(): number        { return this.analyticsData?.globalStats?.totalProjects ?? 0; }
+  getGlobalCompletedTasks(): number       { return this.analyticsData?.globalStats?.completedTasks ?? 0; }
+  getGlobalDelayedTasks(): number         { return this.analyticsData?.globalStats?.delayedTasks ?? 0; }
+  getGlobalActualHours(): number          { return this.analyticsData?.globalStats?.totalActualHours ?? 0; }
+  getProjectTotalTasks(): number          { return this.analyticsData?.projectStats?.total_tasks ?? 0; }
+  getProjectCompletionPercentage(): number{ return this.analyticsData?.kpis?.completionPercentage ?? 0; }
+  getProjectEstimatedHours(): number      { return this.analyticsData?.projectStats?.total_estimated_hours ?? 0; }
+  getWorkloadDistributionLength(): number { return this.analyticsData?.workloadDistribution?.length ?? 0; }
+
+  private parseTaskAssignments(task: any): any[] {
+    let raw = task.assignments;
+    if (!raw) return [];
+    if (typeof raw === 'string') {
+      try { raw = JSON.parse(raw); } catch { return []; }
     }
-    
-    if (isChecked) {
-      // Ajouter l'employé s'il n'est pas déjà sélectionné
-      if (!this.newMeeting.selectedEmployees.includes(employeeId)) {
-        this.newMeeting.selectedEmployees.push(employeeId);
-      }
-    } else {
-      // Retirer l'employé
-      const index = this.newMeeting.selectedEmployees.indexOf(employeeId);
-      if (index > -1) {
-        this.newMeeting.selectedEmployees.splice(index, 1);
-      }
-    }
-    
-    console.log('Employés sélectionnés après modification:', this.newMeeting.selectedEmployees);
-  }
-
-  loadPlannings() {
-    if (!this.currentManager) return;
-    this.iaService.getPlannings(this.currentManager.id).subscribe({
-      next: (plannings: any[]) => {
-        this.savedPlannings = plannings.map(p => ({
-          ...p,
-          simulation_data: typeof p.simulation_data === 'string' ? JSON.parse(p.simulation_data) : p.simulation_data
-        }));
-      },
-      error: (error: any) => console.error('Erreur chargement plannings:', error)
-    });
-  }
-
-  deletePlanning(id: number) {
-    if (confirm('Voulez-vous vraiment supprimer cette simulation ?')) {
-      // Pour l'instant, on fait juste un delete local ou on pourrait ajouter un endpoint backend
-      // Mais restons simples
-      this.savedPlannings = this.savedPlannings.filter(p => p.id !== id);
-    }
-  }
-
-  viewPlanningDetails(planning: any) {
-    // Cette méthode peut être utilisée pour afficher un modal avec les détails du planning
-    console.log('Viewing planning:', planning);
-    // On pourrait rediriger vers le simulateur avec ces données pré-remplies
-  }
-
-  confirmGeneratedProject(projectData: any, managerId: number) {
-    if (confirm('Voulez-vous créer officiellement ce projet et ses tâches ?')) {
-      this.loading = true;
-      this.iaService.confirmGeneratedProject(projectData, managerId).subscribe({
-        next: (response: any) => {
-          console.log('Projet créé:', response);
-          this.loading = false;
-          alert('Projet créé avec succès !');
-          this.navigate('projets');
-          this.loadProjectsFromDatabase();
-        },
-        error: (error: any) => {
-          console.error('Erreur création projet:', error);
-          this.loading = false;
-          alert('Erreur lors de la création du projet.');
-        }
-      });
-    }
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((a: any) => a && a.employee_id != null);
   }
 }

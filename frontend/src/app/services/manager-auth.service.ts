@@ -95,8 +95,11 @@ export class ManagerAuthService {
             throw new Error('Accès réservé aux managers.');
           }
 
+          // Clear any stale employee session before setting manager session
+          localStorage.removeItem('employeeToken');
+          localStorage.removeItem('currentEmployee');
           localStorage.setItem('currentManager', JSON.stringify(manager));
-          localStorage.setItem('managerToken', response.token); // Pour DocumentsService
+          localStorage.setItem('managerToken', response.token);
           this.currentManagerSubject.next(manager);
           return manager;
         } else {
@@ -109,6 +112,7 @@ export class ManagerAuthService {
 
   logout(): void {
     localStorage.removeItem('currentManager');
+    localStorage.removeItem('managerToken');
     this.currentManagerSubject.next(null);
   }
 

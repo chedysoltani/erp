@@ -5,6 +5,34 @@ const db = require('../config/database');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+const PDF_MAX_CHARS = 40000;
+const PROMPT_INJECTION_PATTERN = /ignore\s+(all\s+)?(previous|prior|above|earlier|preceding)\s+(instructions?|prompts?|context|rules?)/gi;
+
+function sanitizePdfText(text) {
+  return text
+    .substring(0, PDF_MAX_CHARS)
+    .replace(PROMPT_INJECTION_PATTERN, '[CONTENU SUPPRIMÉ]')
+    .replace(/```/g, '')
+    .trim();
+}
+
+function addBusinessDays(startDate, days) {
+  const result = new Date(startDate);
+  let added = 0;
+  while (added < days) {
+    result.setDate(result.getDate() + 1);
+    const dow = result.getDay();
+    if (dow !== 0 && dow !== 6) added++;
+  }
+  return result;
+}
+
+function parseEstimatedDays(estimatedTime) {
+  if (!estimatedTime) return 1;
+  const match = String(estimatedTime).match(/\d+/);
+  return match ? Math.max(1, parseInt(match[0])) : 1;
+}
+
 class IAController {
   static async simulateProjectFromPdf(req, res) {
     try {
@@ -12,34 +40,29 @@ class IAController {
         return res.status(400).json({ success: false, message: 'Aucun fichier PDF fourni.' });
       }
 
-      // Lire le contenu du PDF
       const dataBuffer = fs.readFileSync(req.file.path);
       const data = await pdfParse(dataBuffer);
-      const pdfText = data.text;
-
-      // Nettoyer le fichier une fois lu
       fs.unlinkSync(req.file.path);
 
+      const pdfText = data.text;
       if (!pdfText || pdfText.trim().length === 0) {
         return res.status(400).json({ success: false, message: 'Le fichier PDF est vide ou illisible.' });
       }
 
-      // Initialiser le modèle Gemini
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const safePdfText = sanitizePdfText(pdfText);
 
-      const prompt = `
-Tu es un assistant IA intégré dans un ERP intelligent de gestion de projets.
-Ton rôle est d’analyser un cahier de charge fourni et de générer automatiquement un planning professionnel et structuré pour le projet.
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-Voici le contenu extrait du cahier des charges :
-"""
-${pdfText}
-"""
+      const prompt = `Tu es un assistant de planification de projets intégré dans un ERP.
+Analyse le cahier des charges fourni et génère un planning structuré en JSON UNIQUEMENT.
+N'ajoute AUCUN texte en dehors du JSON. Le JSON doit être valide et parseable.
 
-À partir de ce cahier de charge, tu dois générer un planning structuré sous forme JSON UNIQUEMENT, strictement conforme au format ci-dessous.
-N'ajoute AUCUN texte, explication ou bloc de code (comme \`\`\`json) en dehors de l'objet JSON. Le JSON doit être valide et prêt à être parsé.
+CONTENU DU CAHIER DES CHARGES :
+---BEGIN---
+${safePdfText}
+---END---
 
-FORMAT JSON ATTENDU :
+FORMAT JSON ATTENDU (réponds UNIQUEMENT avec ce JSON) :
 {
   "projectName": "Nom du projet",
   "description": "Description courte",
@@ -53,10 +76,10 @@ FORMAT JSON ATTENDU :
         {
           "title": "Titre de la tâche",
           "description": "Description détaillée",
-          "estimatedTime": "Ex: 5 jours",
+          "estimatedDays": 5,
           "priority": "low | medium | high",
           "dependencies": ["Titre d'une autre tâche"],
-          "role": "Rôle recommandé (ex: Frontend Developer)",
+          "role": "Rôle recommandé",
           "status": "not started"
         }
       ]
@@ -66,107 +89,122 @@ FORMAT JSON ATTENDU :
     "startDate": "YYYY-MM-DD",
     "endDate": "YYYY-MM-DD"
   }
-}
-`;
+}`;
 
       const result = await model.generateContent(prompt);
-      const responseText = result.response.text();
-      
-      // Nettoyer la réponse pour s'assurer d'avoir un JSON valide
-      let cleanJson = responseText.trim();
-      if (cleanJson.startsWith('```json')) {
-        cleanJson = cleanJson.substring(7);
-      }
-      if (cleanJson.startsWith('```')) {
-        cleanJson = cleanJson.substring(3);
-      }
-      if (cleanJson.endsWith('```')) {
-        cleanJson = cleanJson.substring(0, cleanJson.length - 3);
-      }
-      cleanJson = cleanJson.trim();
+      let responseText = result.response.text().trim();
 
-      const projectData = JSON.parse(cleanJson);
+      responseText = responseText
+        .replace(/^```json\s*/i, '')
+        .replace(/^```\s*/i, '')
+        .replace(/\s*```$/i, '')
+        .trim();
 
-      res.json({
-        success: true,
-        data: projectData
-      });
+      const projectData = JSON.parse(responseText);
 
+      res.json({ success: true, data: projectData });
     } catch (error) {
-      console.error('Erreur lors de la simulation IA :', error);
+      if (req.file?.path && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      console.error('Erreur simulateProjectFromPdf:', error);
       res.status(500).json({ success: false, message: 'Erreur lors de l\'analyse par l\'IA.', error: error.message });
     }
   }
 
   static async confirmProject(req, res) {
+    const connection = await db.getConnection();
     try {
-      const { projectData, manager_id } = req.body;
+      const { projectData } = req.body;
+      const manager_id = req.user?.id;
+
+      if (!manager_id) {
+        return res.status(401).json({ success: false, message: 'Authentification requise.' });
+      }
 
       if (!projectData || !projectData.projectName) {
         return res.status(400).json({ success: false, message: 'Données de projet invalides.' });
       }
 
-      // Création du projet
       const startDate = projectData.timeline?.startDate || new Date().toISOString().split('T')[0];
       const endDate = projectData.timeline?.endDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-      const projectInsert = await db.query(
-        `INSERT INTO projects (name, description, team, priority, start_date, end_date, budget, manager_id, status, progress) 
+      const priority = projectData.complexity === 'élevé' ? 'high'
+        : projectData.complexity === 'moyen' ? 'medium' : 'low';
+
+      await connection.beginTransaction();
+
+      const [projectResult] = await connection.query(
+        `INSERT INTO projects (name, description, team, priority, start_date, end_date, budget, manager_id, status, progress)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           projectData.projectName,
-          projectData.description,
+          projectData.description || '',
           'Équipe à définir',
-          projectData.complexity === 'élevé' ? 'high' : projectData.complexity === 'moyen' ? 'medium' : 'low',
+          priority,
           startDate,
           endDate,
           0,
-          manager_id || 1, // Manager par défaut si non fourni
+          manager_id,
           'active',
           0
         ]
       );
 
-      const projectId = projectInsert.insertId;
-
-      // Création des tâches "Non assignées"
+      const projectId = projectResult.insertId;
       let createdTasks = 0;
-      for (const phase of projectData.phases) {
-        for (const task of phase.tasks) {
-          await db.query(
-            `INSERT INTO tasks (title, description, project_id, status, priority, due_date, progress, created_at, tags, creator_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)`,
+      let currentDate = new Date(startDate);
+
+      for (const phase of projectData.phases || []) {
+        for (const task of phase.tasks || []) {
+          const estimatedDays = parseEstimatedDays(task.estimatedDays || task.estimatedTime);
+          const taskDueDate = addBusinessDays(currentDate, estimatedDays);
+          currentDate = taskDueDate;
+
+          await connection.query(
+            `INSERT INTO tasks (title, description, project_id, status, priority, due_date, estimated_hours, progress, created_at, tags, creator_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)`,
             [
               `[${phase.name}] ${task.title}`,
-              task.description,
+              task.description || '',
               projectId,
-              'todo', // status
-              task.priority,
-              endDate, // Par défaut, on met la deadline du projet pour la tâche
-              0, // progress
-              JSON.stringify([task.role]), // on garde le rôle dans les tags
-              manager_id || 1 // creator_id
+              'todo',
+              task.priority || 'medium',
+              taskDueDate.toISOString().split('T')[0],
+              estimatedDays * 8,
+              0,
+              JSON.stringify([task.role || 'Non défini']),
+              manager_id
             ]
           );
           createdTasks++;
         }
       }
 
+      await connection.commit();
+
       res.json({
         success: true,
         message: `Projet créé avec succès avec ${createdTasks} tâches.`,
         data: { projectId }
       });
-
     } catch (error) {
-      console.error('Erreur lors de la confirmation du projet :', error);
+      await connection.rollback();
+      console.error('Erreur confirmProject:', error);
       res.status(500).json({ success: false, message: 'Erreur lors de la création du projet.', error: error.message });
+    } finally {
+      connection.release();
     }
   }
 
   static async savePlanning(req, res) {
     try {
-      const { projectData, manager_id } = req.body;
+      const { projectData } = req.body;
+      const manager_id = req.user?.id;
+
+      if (!manager_id) {
+        return res.status(401).json({ success: false, message: 'Authentification requise.' });
+      }
 
       if (!projectData || !projectData.projectName) {
         return res.status(400).json({ success: false, message: 'Données de planning invalides.' });
@@ -178,35 +216,34 @@ FORMAT JSON ATTENDU :
           projectData.projectName,
           projectData.description || '',
           JSON.stringify(projectData),
-          manager_id || 1
+          manager_id
         ]
       );
 
-      res.json({
-        success: true,
-        message: 'Planning enregistré avec succès.'
-      });
+      res.json({ success: true, message: 'Planning enregistré avec succès.' });
     } catch (error) {
-      console.error('Erreur lors de l\'enregistrement du planning :', error);
-      res.status(500).json({ success: false, message: 'Erreur lors de l\'enregistrement du planning.', error: error.message });
+      console.error('Erreur savePlanning:', error);
+      res.status(500).json({ success: false, message: 'Erreur lors de l\'enregistrement du planning.' });
     }
   }
 
   static async getPlannings(req, res) {
     try {
-      const { manager_id } = req.query;
+      const manager_id = req.user?.id;
+
+      if (!manager_id) {
+        return res.status(401).json({ success: false, message: 'Authentification requise.' });
+      }
+
       const plannings = await db.query(
         'SELECT * FROM plannings WHERE manager_id = ? ORDER BY created_at DESC',
-        [manager_id || 1]
+        [manager_id]
       );
 
-      res.json({
-        success: true,
-        data: plannings
-      });
+      res.json({ success: true, data: plannings });
     } catch (error) {
-      console.error('Erreur lors de la récupération des plannings :', error);
-      res.status(500).json({ success: false, message: 'Erreur lors de la récupération des plannings.', error: error.message });
+      console.error('Erreur getPlannings:', error);
+      res.status(500).json({ success: false, message: 'Erreur lors de la récupération des plannings.' });
     }
   }
 }

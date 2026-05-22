@@ -81,11 +81,24 @@ class User {
     }
   }
 
-  static async validatePassword(password, hashedPassword) {
+  static async validatePassword(password, storedPassword) {
     try {
-      return await bcrypt.compare(password, hashedPassword);
+      // Bcrypt hash starts with $2b$ or $2a$
+      if (storedPassword && (storedPassword.startsWith('$2b$') || storedPassword.startsWith('$2a$'))) {
+        return await bcrypt.compare(password, storedPassword);
+      }
+      // Legacy plain-text password — direct compare
+      return password === storedPassword;
     } catch (error) {
       throw new Error('Erreur lors de la validation du mot de passe: ' + error.message);
+    }
+  }
+
+  // Auto-upgrade plain-text password to bcrypt after successful login
+  static async upgradePasswordIfNeeded(userId, password, storedPassword) {
+    if (storedPassword && !storedPassword.startsWith('$2b$') && !storedPassword.startsWith('$2a$')) {
+      const hash = await bcrypt.hash(password, saltRounds);
+      await db.query('UPDATE users SET password = ? WHERE id = ?', [hash, userId]);
     }
   }
 }

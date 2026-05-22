@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, of, throwError } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 import { 
@@ -22,13 +22,18 @@ export class IARecommendationService {
 
   constructor(private http: HttpClient) {}
 
+  private authHeaders(): { headers: HttpHeaders } {
+    const token = localStorage.getItem('managerToken') || '';
+    return { headers: new HttpHeaders({ Authorization: `Bearer ${token}` }) };
+  }
+
   // Obtenir les recommandations d'employés pour une tâche
   getTaskRecommendations(task: TaskWithRequirements): Observable<EmployeeMatch[]> {
     console.log('🚀 Tentative d\'obtenir les recommandations depuis le backend...');
     console.log('📤 Tâche envoyée:', task);
     console.log('🌐 URL du backend:', `${this.apiUrl}/recommendations/task`);
     
-    return this.http.post(`${this.apiUrl}/recommendations/task`, task).pipe(
+    return this.http.post(`${this.apiUrl}/recommendations/task`, task, this.authHeaders()).pipe(
       map((response: any) => {
         console.log('✅ Réponse du backend reçue:', response);
         if (response.success) {
@@ -51,7 +56,7 @@ export class IARecommendationService {
 
   // Obtenir tous les profils de compétences des employés
   getEmployeeSkillsProfiles(): Observable<EmployeeSkillsProfile[]> {
-    return this.http.get(`${this.apiUrl}/employees/skills-profiles`).pipe(
+    return this.http.get(`${this.apiUrl}/employees/skills-profiles`, this.authHeaders()).pipe(
       map((response: any) => {
         if (response.success) {
           return response.data.map((profile: any) => this.formatSkillsProfile(profile));
@@ -67,7 +72,7 @@ export class IARecommendationService {
 
   // Simuler un projet avec IA
   simulateProject(project: ProjectSimulation): Observable<any> {
-    return this.http.post(`${this.apiUrl}/simulate-project`, project).pipe(
+    return this.http.post(`${this.apiUrl}/simulate-project`, project, this.authHeaders()).pipe(
       map((response: any) => {
         if (response.success) {
           return response.data;
@@ -88,7 +93,7 @@ export class IARecommendationService {
     const formData = new FormData();
     formData.append('file', file);
 
-    return this.http.post(`${this.iaApiUrl}/simulate-pdf`, formData).pipe(
+    return this.http.post(`${this.iaApiUrl}/simulate-pdf`, formData, this.authHeaders()).pipe(
       map((response: any) => {
         if (response.success) {
           return response.data;
@@ -103,7 +108,7 @@ export class IARecommendationService {
   }
 
   confirmGeneratedProject(projectData: any, managerId: number): Observable<any> {
-    return this.http.post(`${this.iaApiUrl}/confirm-project`, { projectData, manager_id: managerId }).pipe(
+    return this.http.post(`${this.iaApiUrl}/confirm-project`, { projectData, manager_id: managerId }, this.authHeaders()).pipe(
       map((response: any) => {
         if (response.success) {
           return response.data;
@@ -118,7 +123,7 @@ export class IARecommendationService {
   }
 
   savePlanning(projectData: any, managerId: number): Observable<any> {
-    return this.http.post(`${this.iaApiUrl}/save-planning`, { projectData, manager_id: managerId }).pipe(
+    return this.http.post(`${this.iaApiUrl}/save-planning`, { projectData, manager_id: managerId }, this.authHeaders()).pipe(
       map((response: any) => {
         if (response.success) {
           return response.data;
@@ -133,7 +138,7 @@ export class IARecommendationService {
   }
 
   getPlannings(managerId: number): Observable<any[]> {
-    return this.http.get(`${this.iaApiUrl}/plannings?manager_id=${managerId}`).pipe(
+    return this.http.get(`${this.iaApiUrl}/plannings?manager_id=${managerId}`, this.authHeaders()).pipe(
       map((response: any) => {
         if (response.success) {
           return response.data;

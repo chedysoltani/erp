@@ -21,7 +21,7 @@
            (click)="navigate(item.id)">
         <i class="bi {{ item.icon }}"></i>
         <span>{{ item.label }}</span>
-        <span *ngIf="item.badge" class="nav-badge">{{ item.badge }}</span>
+        <span *ngIf="item.badgeCount > 0" class="nav-badge">{{ item.badgeCount }}</span>
       </div>
 
       <div class="nav-group-label">Équipe</div>
@@ -31,7 +31,7 @@
            (click)="navigate(item.id)">
         <i class="bi {{ item.icon }}"></i>
         <span>{{ item.label }}</span>
-        <span *ngIf="item.badge" class="nav-badge">{{ item.badge }}</span>
+        <span *ngIf="item.badgeCount > 0" class="nav-badge">{{ item.badgeCount }}</span>
       </div>
 
       <div class="nav-group-label">Ressources</div>
@@ -291,10 +291,6 @@
             <button class="btn-primary" (click)="openCreateProjectModal()">
               <i class="bi bi-plus-circle"></i>
               Créer Projet
-            </button>
-            <!-- Bouton de test pour débuggage -->
-            <button class="btn-secondary" (click)="testClick()" style="margin-left: 10px;">
-              Test Click
             </button>
             <div class="filter-controls">
               <select class="filter-select">
@@ -1093,6 +1089,11 @@
             </tbody>
           </table>
         </div>
+      </div>
+
+      <!-- ── PRÉSENCE ── -->
+      <div *ngIf="activeSection === 'presence'" class="section fade-in">
+        <app-manager-attendance></app-manager-attendance>
       </div>
 
     </div>

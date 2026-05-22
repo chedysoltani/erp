@@ -59,12 +59,19 @@
         <i class="bi bi-file-text"></i>
         <span>Documents</span>
       </button>
-      <button 
-        class="nav-item" 
+      <button
+        class="nav-item"
         [class]="{ active: activeSection === 'competences' }"
         (click)="changeSection('competences')">
         <i class="bi bi-award"></i>
         <span>Compétences</span>
+      </button>
+      <button
+        class="nav-item"
+        [class]="{ active: activeSection === 'pointage' }"
+        (click)="changeSection('pointage')">
+        <i class="bi bi-fingerprint"></i>
+        <span>Pointage</span>
       </button>
     </div>
   </nav>
@@ -304,9 +311,14 @@
       </div>
     </div>
 
-    <!-- â•â• COMPÉTENCES â•â• -->
+    <!-- ── COMPÉTENCES ── -->
     <div *ngIf="activeSection === 'competences'" class="section fade-in">
       <app-skills-profile></app-skills-profile>
+    </div>
+
+    <!-- ── POINTAGE ── -->
+    <div *ngIf="activeSection === 'pointage'" class="section fade-in">
+      <app-employee-pointage [employeeId]="currentEmployee?.id ?? 0"></app-employee-pointage>
     </div>
   </main>
 </div>

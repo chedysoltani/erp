@@ -1036,25 +1036,46 @@ router.post('/:id/time-sessions', async (req, res) => {
     const { id } = req.params;
     const { employee_id, description } = req.body;
 
-    // Vérifier la tâche et l'affectation
-    const task = await db.query('SELECT * FROM tasks WHERE id = ? AND assignee_id = ?', [id, employee_id]);
-    if (task.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Tâche introuvable ou non assignée à cet employé'
-      });
+    if (!employee_id) {
+      return res.status(400).json({ success: false, message: 'employee_id requis.' });
     }
 
-    // Vérifier si une session est déjà en cours pour cet employé sur n'importe quelle tâche
-    const runningSession = await db.query(`
-      SELECT * FROM task_time_sessions 
-      WHERE employee_id = ? AND status = 'running'
-    `, [employee_id]);
+    // Vérifier que la tâche existe et que l'employé y est affecté (assignee_id OU task_assignments)
+    const tasks = await db.query(
+      `SELECT t.id FROM tasks t
+       WHERE t.id = ?
+         AND (t.assignee_id = ?
+              OR EXISTS (SELECT 1 FROM task_assignments ta
+                         WHERE ta.task_id = t.id AND ta.employee_id = ?))`,
+      [id, employee_id, employee_id]
+    );
+    if (tasks.length === 0) {
+      return res.status(404).json({ success: false, message: 'Tâche introuvable ou non assignée à cet employé.' });
+    }
 
-    if (runningSession.length > 0) {
-      return res.status(400).json({
+    // Auto-expirer les sessions bloquées depuis plus de 16h (déconnexion sans checkout)
+    await db.query(
+      `UPDATE task_time_sessions
+       SET status = 'completed', end_time = DATE_ADD(start_time, INTERVAL duration_seconds SECOND),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE employee_id = ? AND status = 'running'
+         AND TIMESTAMPDIFF(HOUR, start_time, NOW()) > 16`,
+      [employee_id]
+    );
+
+    // Vérifier si une session active (running ou paused) est déjà en cours
+    const activeSessions = await db.query(
+      `SELECT id, task_id, status FROM task_time_sessions
+       WHERE employee_id = ? AND status IN ('running', 'paused')`,
+      [employee_id]
+    );
+
+    if (activeSessions.length > 0) {
+      const active = activeSessions[0];
+      return res.status(409).json({
         success: false,
-        message: 'Une autre session est déjà en cours. Terminez ou mettez en pause la session active avant d’en démarrer une nouvelle.'
+        message: `Une session ${active.status === 'running' ? 'en cours' : 'en pause'} existe déjà sur la tâche #${active.task_id}. Terminez ou mettez-la en pause avant d'en démarrer une nouvelle.`,
+        data: { activeSessionId: active.id, activeTaskId: active.task_id, activeStatus: active.status }
       });
     }
 
@@ -1073,7 +1094,7 @@ router.post('/:id/time-sessions', async (req, res) => {
       if (isStartBlockedByDependency(d.dependency_type, d.pred_status)) {
         return res.status(400).json({
           success: false,
-          message: 'Cette tâche ne peut pas démarrer : une dépendance sur une tâche prédécesseur n’est pas satisfaite.'
+          message: "Cette tâche ne peut pas démarrer : une dépendance prédécesseur n'est pas satisfaite."
         });
       }
     }

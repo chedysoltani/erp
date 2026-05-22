@@ -1,8 +1,9 @@
 import { Injectable } from '@angular/core';
 import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable, of, throwError } from 'rxjs';
-import { map, delay, catchError } from 'rxjs/operators';
+import { BehaviorSubject, Observable, throwError } from 'rxjs';
+import { map, catchError } from 'rxjs/operators';
+import { HttpErrorResponse } from '@angular/common/http';
 import { environment } from '../../environments/environment';
 
 export interface Employee {
@@ -52,8 +53,11 @@ export class EmployeeAuthService {
               manager_id: 1, // Par défaut
               token: response.token
             };
+            // Clear any stale manager session before setting employee session
+            localStorage.removeItem('managerToken');
+            localStorage.removeItem('currentManager');
             localStorage.setItem('currentEmployee', JSON.stringify(employee));
-            localStorage.setItem('employeeToken', response.token); // Pour DocumentsService
+            localStorage.setItem('employeeToken', response.token);
             this.currentEmployeeSubject.next(employee);
             console.log('Employé authentifié:', employee);
             return employee;
@@ -63,9 +67,9 @@ export class EmployeeAuthService {
             throw new Error('Email ou mot de passe incorrect');
           }
         }),
-        catchError(error => {
-          console.error('Erreur de login employé:', error);
-          throw error;
+        catchError((error: HttpErrorResponse) => {
+          const msg = error.error?.message || 'Email ou mot de passe incorrect';
+          return throwError(() => new Error(msg));
         })
       );
   }
