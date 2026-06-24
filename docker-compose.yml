@@ -1,0 +1,94 @@
+version: "3.9"
+
+services:
+
+  # ── MySQL 8.0 ──────────────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: erp_mysql
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3306:3306"   # SSH tunnel uniquement — non exposé sur l'IP publique
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # Exécutés automatiquement au premier démarrage (ordre alphabétique)
+      # fix-auth.sql est exclu : syntaxe MariaDB incompatible avec MySQL 8.0
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - ./database/create_timesheets_table.sql:/docker-entrypoint-initdb.d/02_create_timesheets_table.sql:ro
+    networks:
+      - erp-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ── Express Backend ────────────────────────────────────────────────────────
+  backend:
+    image: ghcr.io/${GITHUB_REPOSITORY}/erp-backend:${IMAGE_TAG:-latest}
+    container_name: erp_backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      UPLOAD_PATH: uploads
+    volumes:
+      - uploads_data:/app/uploads
+    networks:
+      - erp-net
+      - proxy-net
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # ── Angular Frontend ───────────────────────────────────────────────────────
+  frontend:
+    image: ghcr.io/${GITHUB_REPOSITORY}/erp-frontend:${IMAGE_TAG:-latest}
+    container_name: erp_frontend
+    restart: unless-stopped
+    networks:
+      - proxy-net
+
+  # ── phpMyAdmin — MySQL Database Manager ───────────────────────────────────
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: erp_phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      UPLOAD_LIMIT: 64M
+    networks:
+      - erp-net
+      - proxy-net
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
+    driver: local
+  uploads_data:
+    driver: local
+
+networks:
+  erp-net:
+    driver: bridge
+    internal: true
+  proxy-net:
+    external: true
+    name: proxy-net

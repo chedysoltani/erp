@@ -1,0 +1,12 @@
+node_modules/
+npm-debug.log*
+.env
+.env.*
+uploads/
+*.sql
+test_*.js
+diagnostic_*.js
+populate_*.js
+execute_*.js
+run-migrations.js
+create-admin.js
