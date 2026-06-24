@@ -65,7 +65,7 @@ Mettez à jour le système et installez Docker :
 
 ```bash
 apt update && apt upgrade -y
-apt install -y git curl ufw
+apt install -y curl ufw
 
 # Installer Docker Engine
 curl -fsSL https://get.docker.com | sh
@@ -81,9 +81,11 @@ ufw enable
 # Créer le réseau partagé Docker (requis avant tout autre service)
 docker network create proxy-net
 
-# Créer le dossier de l'application
-mkdir -p /opt/erp
+# Créer le dossier de déploiement (seul dossier nécessaire sur le VPS)
+mkdir -p ~/apps/erp
 ```
+
+> Git n'est pas nécessaire sur le VPS. Le CI/CD copie uniquement `docker-compose.yml` et `database/` via SCP à chaque push.
 
 ---
 
@@ -129,13 +131,12 @@ docker compose up -d
 
 ---
 
-## Étape 3 : Configurer les variables d'environnement sur le VPS
+## Étape 3 : Créer le fichier .env sur le VPS
+
+Le VPS ne contient **aucun code source**. Seul le `.env` est créé manuellement (une seule fois). Le `docker-compose.yml` sera copié automatiquement par le CI/CD au premier push.
 
 ```bash
-cd /opt/erp
-git clone https://github.com/VOTRE_USERNAME/windsurf-project-2.git .
-cp .env.example .env
-nano .env
+nano ~/apps/erp/.env
 ```
 
 Remplissez chaque variable avec les vraies valeurs :
@@ -194,12 +195,13 @@ git push origin main
 Le workflow GitHub Actions va automatiquement :
 1. Builder l'image backend et la pousser sur GHCR
 2. Builder l'image frontend avec l'URL de l'API et la pousser sur GHCR
-3. SSH dans le VPS, `git pull`, `docker compose pull`, `docker compose up -d`
+3. Copier `docker-compose.yml` et `database/` sur le VPS via SCP
+4. SSH dans le VPS → `docker compose pull` → `docker compose up -d`
 
 Vérifier l'état des containers :
 
 ```bash
-docker compose -f /opt/erp/docker-compose.yml ps
+docker compose -f ~/apps/erp/docker-compose.yml ps
 ```
 
 Résultat attendu :
@@ -248,14 +250,14 @@ Résultat attendu :
 ### Logs en temps réel
 
 ```bash
-docker compose -f /opt/erp/docker-compose.yml logs -f backend
-docker compose -f /opt/erp/docker-compose.yml logs -f mysql
+docker compose -f ~/apps/erp/docker-compose.yml logs -f backend
+docker compose -f ~/apps/erp/docker-compose.yml logs -f mysql
 ```
 
 ### Redémarrer un service
 
 ```bash
-docker compose -f /opt/erp/docker-compose.yml restart backend
+docker compose -f ~/apps/erp/docker-compose.yml restart backend
 ```
 
 ### Accéder à MySQL en ligne de commande
@@ -268,28 +270,28 @@ docker exec -it erp_mysql mysql -u root -p sit_erp_db
 
 ```bash
 docker exec -i erp_mysql mysql -u ${DB_USER} -p${DB_PASSWORD} sit_erp_db \
-  < /opt/erp/database/nouvelle_migration.sql
+  < ~/apps/erp/database/nouvelle_migration.sql
 ```
 
 ### Backup de la base de données
 
 ```bash
-mkdir -p /opt/erp/backups
+mkdir -p ~/apps/erp/backups
 docker exec erp_mysql mysqldump -u root -p${DB_ROOT_PASSWORD} sit_erp_db \
-  > /opt/erp/backups/sit_erp_db_$(date +%Y%m%d_%H%M%S).sql
+  > ~/apps/erp/backups/sit_erp_db_$(date +%Y%m%d_%H%M%S).sql
 ```
 
 ### Restaurer un backup
 
 ```bash
 docker exec -i erp_mysql mysql -u root -p${DB_ROOT_PASSWORD} sit_erp_db \
-  < /opt/erp/backups/sit_erp_db_YYYYMMDD_HHMMSS.sql
+  < ~/apps/erp/backups/sit_erp_db_YYYYMMDD_HHMMSS.sql
 ```
 
 ### Redéploiement manuel (sans CI/CD)
 
 ```bash
-cd /opt/erp
+cd ~/apps/erp
 git pull origin main
 docker compose pull backend frontend
 docker compose up -d --remove-orphans
@@ -307,7 +309,7 @@ docker image prune -f
 | Routes Angular retournent 404 | Problème SPA routing | Le nginx config est embarqué dans l'image — vérifier que l'image est bien reconstruite |
 | SSL ne s'émet pas | DNS pas propagé ou port 80 fermé | `nslookup api.votre-domaine.com` — vérifier `ufw status` |
 | Fichiers uploadés perdus | Volume non monté | `docker inspect erp_backend \| grep -A5 Mounts` |
-| phpMyAdmin inaccessible | Container pas démarré | `docker compose -f /opt/erp/docker-compose.yml up -d phpmyadmin` |
+| phpMyAdmin inaccessible | Container pas démarré | `docker compose -f ~/apps/erp/docker-compose.yml up -d phpmyadmin` |
 
 ---
 
