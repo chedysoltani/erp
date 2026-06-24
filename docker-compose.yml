@@ -58,6 +58,8 @@ services:
     image: ghcr.io/${GITHUB_REPOSITORY}/erp-frontend:${IMAGE_TAG:-latest}
     container_name: erp_frontend
     restart: unless-stopped
+    ports:
+      - "8703:8703"
     networks:
       - proxy-net
 

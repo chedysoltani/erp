@@ -25,7 +25,7 @@ RUN apk update && apk upgrade --no-cache
 RUN rm /etc/nginx/conf.d/default.conf && \
     { \
       echo 'server {'; \
-      echo '    listen 80;'; \
+      echo '    listen 8703;'; \
       echo '    server_name _;'; \
       echo '    root /usr/share/nginx/html;'; \
       echo '    index index.html;'; \
@@ -50,6 +50,6 @@ RUN rm /etc/nginx/conf.d/default.conf && \
 
 COPY --from=builder /app/dist/frontend /usr/share/nginx/html
 
-EXPOSE 80
+EXPOSE 8703
 
 CMD ["nginx", "-g", "daemon off;"]
