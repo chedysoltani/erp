@@ -32,6 +32,8 @@ services:
     image: ghcr.io/${GITHUB_REPOSITORY}/erp-backend:${IMAGE_TAG:-latest}
     container_name: erp_backend
     restart: unless-stopped
+    ports:
+      - "3001:3001"
     environment:
       NODE_ENV: production
       PORT: 3001
